@@ -5,6 +5,7 @@ import builtins
 import math
 import shutil
 import time
+import datetime
 
 import numpy as np
 import torch as tch
@@ -15,7 +16,7 @@ import torch.backends.cudnn as cudnn
 import torch.multiprocessing as mp
 import torch.distributed as dist
 import pickle
-
+import wandb
 
 
 import DataTools
@@ -51,6 +52,7 @@ args = dict(
     momentum = 0.9,
     weight_decay = 1e-4,
     start_epoch = 0,
+    lossParams = dict(learningRate = 1e-3, threshold=40., type='binary cross entropy'),
     pretrain_epochs = 150,
     finetuning_epochs = 20,
     cos = True,
@@ -59,6 +61,7 @@ args = dict(
     pretrained = 'checkpoints/checkpoint_0075.pth.tar',
     pretrain = True,
     freeze_features = True,
+    logtowandb = True,
 
 )
 
@@ -118,6 +121,40 @@ def main():
 
     ngpus_per_node = tch.cuda.device_count()
     
+    date = datetime.datetime.now().date()
+
+    if args["pretrain"]:
+        project = f"MLECG_MoCO_LVEF_PRETRAIN_{date}"
+        notes = "Pretrain"
+        config = dict(
+            batch_size = args["batch_size"],
+            ngpus = ngpus_per_node,
+            learning_rate = args["lr"],
+            epochs = args["pretrain_epochs"]
+        )
+        networkLabel = "pre_train_ECG_SpatialTemporalNet"
+    else:
+        project = f"MLECG_MoCO_LVEF_CLASSIFICATION_{date}"
+        notes = f"Classification"
+        config = dict(
+            batch_size = args["batch_size"],
+            ngpus = ngpus_per_node,
+            learning_rate = args["lossParams"]["learningRate"],
+            epochs = args["finetuning_epochs"]
+        )
+        networkLabel = "Fine_tune_ECG_SpatialTemporalNet"
+
+    # if args["logtowandb"]:
+    #     wandbrun = wandb.init(
+    #         project = project,
+    #         notes=notes,
+    #         tags=["training", "no artifact"],
+    #         config=config,
+    #         entity='deekshith',
+    #         reinit=True,
+    #         name=f"{networkLabel}_{datetime.datetime.now()}"
+    # )
+    
     if args["pretrain"]:
         if args["multiprocessing_distributed"]:
             args["world_size"] = ngpus_per_node * args["world_size"]
@@ -129,6 +166,7 @@ def main():
         main_lincls.main_worker(args)
 
     print("DUNDANADUN")
+    # wandbrun.finish()
 
 
 if __name__ == "__main__":

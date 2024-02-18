@@ -5,6 +5,7 @@ import builtins
 import math
 import shutil
 import time
+import datetime
 
 import numpy as np
 import torch as tch
@@ -15,6 +16,7 @@ import torch.backends.cudnn as cudnn
 import torch.multiprocessing as mp
 import torch.distributed as dist
 import pickle
+import wandb
 
 
 import DataTools
@@ -92,6 +94,33 @@ def main_worker(gpu, ngpus_per_node, args):
         args["mlp"],        
     )
     print(model)
+    
+    # WandB
+    date = datetime.datetime.now().date()
+
+    project = f"MLECG_MoCO_LVEF_PRETRAIN_{date}"
+    notes = "Pretrain"
+    config = dict(
+        batch_size = args["batch_size"],
+        ngpus = ngpus_per_node,
+        learning_rate = args["lr"],
+        epochs = args["pretrain_epochs"]
+    )
+    networkLabel = "pre_train_ECG_SpatialTemporalNet"
+    if not args["multiprocessing_distributed"] or (
+            args["multiprocessing_distributed"] and args["rank"] % ngpus_per_node == 0
+        ):
+        if args["logtowandb"]:
+            wandbrun = wandb.init(
+                project = project,
+                notes=notes,
+                tags=["training", "no artifact"],
+                config=config,
+                entity='deekshith',
+                reinit=True,
+                name=f"{networkLabel}_{datetime.datetime.now()}"
+        )
+
 
     if args["distributed"]:
         if args["gpu"] is not None:
@@ -134,21 +163,30 @@ def main_worker(gpu, ngpus_per_node, args):
             pre_train_sampler.set_epoch(epoch)
         adjust_learning_rate(optimizer, epoch, args)
 
-        train(pre_train_loader, model, criterion, optimizer, epoch, args)
+        losses, top1, top5 = train(pre_train_loader, model, criterion, optimizer, epoch, args)
 
         if not args["multiprocessing_distributed"] or (
             args["multiprocessing_distributed"] and args["rank"] % ngpus_per_node == 0
-        ) and (epoch + 1)% 15 == 0:
-            save_checkpoint(
-                {
-                    "epoch": epoch + 1,
-                    "arch": "Spatio Temporal Net",
-                    "state_dict": model.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                },
-                is_best=False,
-                filename="checkpoints/checkpoint_{:04d}.pth.tar".format(epoch+1),
-            )
+        ):
+            if (epoch + 1)% 15 == 0:
+                save_checkpoint(
+                    {
+                        "epoch": epoch + 1,
+                        "arch": "Spatio Temporal Net",
+                        "state_dict": model.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                    },
+                    is_best=False,
+                    filename="checkpoints/checkpoint_{:04d}.pth.tar".format(epoch+1),
+                )
+            wandb.log({
+                'Epoch': epoch,
+                'loss': losses.avg,
+                'acc@1': top1.avg,
+                'acc@5': top5.avg
+            })
+    if args["logtowandb"]:
+        wandbrun.finish()
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
     batch_time = AverageMeter("Time", ":6.3f")
@@ -190,6 +228,8 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
         if i % args["print_freq"] == 0:
             progress.display(i)
+    
+    return losses, top1, top5
 
 
 def save_checkpoint(state, is_best, filename="checkpoints/checkpoint.pth.tar"):

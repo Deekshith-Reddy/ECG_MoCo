@@ -19,6 +19,7 @@ import torchvision.datasets as datasets
 import torchvision.models as models
 import torchvision.transforms as transforms
 import pickle
+import wandb
 
 import Networks
 import parameters
@@ -112,6 +113,7 @@ def main_worker(args):
     # Data Loading
     train_loader, val_loader = dataprep(args)
 
+    lossParams = args["lossParams"]
     lossParams = dict(learningRate = 1e-3, threshold=40., type='binary cross entropy')
 
 
@@ -124,7 +126,7 @@ def main_worker(args):
     
     optimizer1 = tch.optim.Adam(model.parameters(), lr=lossParams['learningRate'])
     
-    logToWandB = False
+    logToWandB = args["logtowandb"]
     lossFun = T.loss_bce
 
     #Training
