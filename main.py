@@ -46,7 +46,7 @@ args = dict(
     moco_m = 0.999,
     moco_t = 0.07,
     mlp = False,
-    batch_size = 512,
+    batch_size = 128,
     workers = 32,
     lr=0.03,
     momentum = 0.9,
@@ -55,12 +55,12 @@ args = dict(
     lossParams = dict(learningRate = 1e-3, threshold=40., type='binary cross entropy'),
     pretrain_epochs = 150,
     finetuning_epochs = 20,
-    cos = True,
-    schedule = [120, 160],
+    cos = False,
+    schedule = [60, 120],
     print_freq = 20,
     pretrained = 'checkpoints/checkpoint_0075.pth.tar',
     pretrain = True,
-    freeze_features = True,
+    freeze_features = False,
     logtowandb = True,
 
 )
@@ -123,37 +123,29 @@ def main():
     
     date = datetime.datetime.now().date()
 
-    if args["pretrain"]:
-        project = f"MLECG_MoCO_LVEF_PRETRAIN_{date}"
-        notes = "Pretrain"
-        config = dict(
-            batch_size = args["batch_size"],
-            ngpus = ngpus_per_node,
-            learning_rate = args["lr"],
-            epochs = args["pretrain_epochs"]
-        )
-        networkLabel = "pre_train_ECG_SpatialTemporalNet"
-    else:
-        project = f"MLECG_MoCO_LVEF_CLASSIFICATION_{date}"
+    if not args["pretrain"]:
+        project = f"MLECG_MoCO_LVEF_CLASSIFICATION"
         notes = f"Classification"
         config = dict(
             batch_size = args["batch_size"],
             ngpus = ngpus_per_node,
             learning_rate = args["lossParams"]["learningRate"],
-            epochs = args["finetuning_epochs"]
+            epochs = args["finetuning_epochs"],
+            freeze_features = args["freeze_features"],
+            lr_schedule = args["schedule"]
         )
         networkLabel = "Fine_tune_ECG_SpatialTemporalNet"
 
-    # if args["logtowandb"]:
-    #     wandbrun = wandb.init(
-    #         project = project,
-    #         notes=notes,
-    #         tags=["training", "no artifact"],
-    #         config=config,
-    #         entity='deekshith',
-    #         reinit=True,
-    #         name=f"{networkLabel}_{datetime.datetime.now()}"
-    # )
+        if args["logtowandb"]:
+            wandbrun = wandb.init(
+                project = project,
+                notes=notes,
+                tags=["training", "no artifact"],
+                config=config,
+                entity='deekshith',
+                reinit=True,
+                name=f"{networkLabel}_{datetime.datetime.now()}"
+            )
     
     if args["pretrain"]:
         if args["multiprocessing_distributed"]:
@@ -166,7 +158,8 @@ def main():
         main_lincls.main_worker(args)
 
     print("DUNDANADUN")
-    # wandbrun.finish()
+    if not args["pretrain"] and args["logtowandb"]:
+        wandbrun.finish()
 
 
 if __name__ == "__main__":
