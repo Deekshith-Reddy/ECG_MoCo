@@ -5,6 +5,7 @@ import random
 import shutil
 import time
 import warnings
+import datetime
 
 import torch as tch
 import torch.backends.cudnn as cudnn
@@ -26,6 +27,7 @@ import parameters
 import DataTools
 import Training as T
 
+
 best_acc1 = 0
 device = tch.device("cuda" if tch.cuda.is_available() else "cpu")
 gpuIds = list(range(tch.cuda.device_count()))
@@ -35,35 +37,43 @@ def dataprep(args):
     normEcgs = False
 
     print("Preparing Data For Classification Finetuning")
-    with open('patient_splits/classification_patients.pkl', 'rb') as file:
-        classification_patients = pickle.load(file)
-    
-    num_classification_patients = len(classification_patients)
-    finetuning_ratio = 0.5
-    num_finetuning = int(num_classification_patients * finetuning_ratio)
-    num_validation = num_classification_patients - num_finetuning
+    with open('patient_splits/validation_patients.pkl', 'rb') as file:
+        validation_patients = pickle.load(file)
 
+    with open('patient_splits/pre_train_patients.pkl', 'rb') as file:
+        pretrain_patients = pickle.load(file)
+    
+    num_classification_patients = len(pretrain_patients)
+    finetuning_ratios = [1.0, 0.75, 0.50, 0.10, 0.05, 0.01]
+    num_finetuning = [int(num_classification_patients * r) for r in finetuning_ratios]
+    print(f"Num of classifcation patients is {num_classification_patients} Patients split as {num_finetuning}")
+    
     random_seed_split = 1
     patientInds = list(range(num_classification_patients))
     random.Random(random_seed_split).shuffle(patientInds)
 
-    finetuning_patient_indices = patientInds[:num_finetuning]
-    validation_patient_indices = patientInds[num_finetuning:num_finetuning + num_validation]
+    train_loaders = []
+    dataset_lengths = []
+    for i in num_finetuning:
+        finetuning_patient_indices = patientInds[:i]
 
-    finetuning_patients = classification_patients[finetuning_patient_indices].squeeze()
-    validation_patients = classification_patients[validation_patient_indices]
+        finetuning_patients = pretrain_patients[finetuning_patient_indices].squeeze()
 
-    train_dataset = DataTools.ECGDatasetLoader(baseDir=dataDir, patients=finetuning_patients.tolist(), normalize=normEcgs)
-    validation_dataset = DataTools.ECGDatasetLoader(baseDir=dataDir, patients=validation_patients.tolist(), normalize=normEcgs)
+        dataset = DataTools.ECGDatasetLoader(baseDir=dataDir, patients=finetuning_patients.tolist(), normalize=normEcgs)
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
+        loader = torch.utils.data.DataLoader(
+        dataset,
         batch_size=args["batch_size"],
         shuffle=True,
         num_workers=args["workers"],
         pin_memory=True,
-    )
+        )
 
+        train_loaders.append(loader)
+        dataset_lengths.append(len(dataset))
+    
+    validation_patients = validation_patients
+    validation_dataset = DataTools.ECGDatasetLoader(baseDir=dataDir, patients=validation_patients.tolist(), normalize=normEcgs)
     val_loader = torch.utils.data.DataLoader(
         validation_dataset,
         batch_size=args["batch_size"],
@@ -72,7 +82,9 @@ def dataprep(args):
         pin_memory=True,
     )
 
-    return train_loader, val_loader
+    print(f"Preparing finetuning with {dataset_lengths} number of ECGs and with {len(validation_dataset)} validation ECGs")
+
+    return train_loaders, val_loader
 
 def main_worker(args):
     
@@ -111,10 +123,9 @@ def main_worker(args):
     model.to(device) 
     
     # Data Loading
-    train_loader, val_loader = dataprep(args)
+    train_loaders, val_loader = dataprep(args)
 
     lossParams = args["lossParams"]
-    lossParams = dict(learningRate = 1e-3, threshold=40., type='binary cross entropy')
 
 
     optimizer = tch.optim.SGD(
@@ -131,20 +142,50 @@ def main_worker(args):
 
     #Training
     print("Starting Training")
-    T.trainNetwork(
-                    network=model,
-                    trainDataLoader=train_loader,
-                    testDataLoader=val_loader,
-                    numEpoch=args["finetuning_epochs"],
-                    optimizer=optimizer1,
-                    lossFun=lossFun,
-                    lossParams=lossParams,
-                    modelSaveDir='models/',
-                    label='networkLabel',
-                    args=args,
-                    logToWandB=logToWandB,
-                    problemType='Binary'
-                )
+
+    for train_loader in train_loaders:
+        print(f"Starting Finetuning with {len(train_loader.dataset)} patients")
+
+        project = f"MLECG_MoCO_LVEF_CLASSIFICATION"
+        notes = f"Classification"
+        config = dict(
+            batch_size = args["batch_size"],
+            learning_rate = args["lossParams"]["learningRate"],
+            ngpus_per_node = tch.cuda.device_count(),
+            epochs = args["finetuning_epochs"],
+            freeze_features = args["freeze_features"],
+            lr_schedule = args["schedule"],
+            finetuning_examples = len(train_loader.dataset)
+        )
+        networkLabel = "Fine_tune_ECG_SpatialTemporalNet"
+
+        if logToWandB:
+            wandbrun = wandb.init(
+                project = project,
+                notes=notes,
+                tags=["training", "no artifact"],
+                config=config,
+                entity='deekshith',
+                reinit=True,
+                name=f"{networkLabel}_{len(train_loader.dataset)}_{datetime.datetime.now()}"
+            )
+
+        T.trainNetwork(
+                        network=model,
+                        trainDataLoader=train_loader,
+                        testDataLoader=val_loader,
+                        numEpoch=args["finetuning_epochs"],
+                        optimizer=optimizer1,
+                        lossFun=lossFun,
+                        lossParams=lossParams,
+                        modelSaveDir='models/',
+                        label='networkLabel',
+                        args=args,
+                        logToWandB=logToWandB,
+                        problemType='Binary'
+                    )
+        if logToWandB:
+            wandbrun.finish()
     
 
 

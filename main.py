@@ -46,20 +46,20 @@ args = dict(
     moco_m = 0.999,
     moco_t = 0.07,
     mlp = False,
-    batch_size = 128,
+    batch_size = 80,
     workers = 32,
     lr=0.03,
     momentum = 0.9,
     weight_decay = 1e-4,
     start_epoch = 0,
-    lossParams = dict(learningRate = 1e-3, threshold=40., type='binary cross entropy'),
+    lossParams = dict(learningRate = 1e-4, threshold=40., type='binary cross entropy'),
     pretrain_epochs = 150,
-    finetuning_epochs = 20,
+    finetuning_epochs = 25,
     cos = False,
     schedule = [60, 120],
     print_freq = 20,
     pretrained = 'checkpoints/checkpoint_0075.pth.tar',
-    pretrain = True,
+    pretrain = False,
     freeze_features = False,
     logtowandb = True,
 
@@ -78,24 +78,25 @@ def splitPatients(args):
     numPatients = patientIds.shape[0]
 
     # Data
-    pre_train_split_ratio = 0.8
+    pre_train_split_ratio = 0.9
     num_pre_train = int(pre_train_split_ratio * numPatients)
-    num_classification = numPatients - num_pre_train
+    num_validation = numPatients - num_pre_train
 
     random_seed_split = 1
     patientInds = list(range(numPatients))
     random.Random(random_seed_split).shuffle(patientInds)
 
     pre_train_patient_indices = patientInds[:num_pre_train]
-    classification_patient_idices = patientInds[num_pre_train:num_pre_train + num_classification]
+    validation_patient_indices = patientInds[num_pre_train:num_pre_train + num_validation]
 
     pre_train_patients = patientIds[pre_train_patient_indices].squeeze()
-    classification_patients = patientIds[classification_patient_idices].squeeze()
+    validation_patients = patientIds[validation_patient_indices].squeeze()
 
     with open('patient_splits/pre_train_patients.pkl', 'wb') as file:
         pickle.dump(pre_train_patients, file)
-    with open('patient_splits/classification_patients.pkl', 'wb') as file:
-        pickle.dump(classification_patients, file)
+    with open('patient_splits/validation_patients.pkl', 'wb') as file:
+        pickle.dump(validation_patients, file)
+    print(f"Out of Total {numPatients} Splitting {len(pre_train_patients)} for pre-train and finetuning, {len(validation_patients)} for validation")
 
 def main():
     if args["seed"] is not None:
@@ -121,31 +122,6 @@ def main():
 
     ngpus_per_node = tch.cuda.device_count()
     
-    date = datetime.datetime.now().date()
-
-    if not args["pretrain"]:
-        project = f"MLECG_MoCO_LVEF_CLASSIFICATION"
-        notes = f"Classification"
-        config = dict(
-            batch_size = args["batch_size"],
-            ngpus = ngpus_per_node,
-            learning_rate = args["lossParams"]["learningRate"],
-            epochs = args["finetuning_epochs"],
-            freeze_features = args["freeze_features"],
-            lr_schedule = args["schedule"]
-        )
-        networkLabel = "Fine_tune_ECG_SpatialTemporalNet"
-
-        if args["logtowandb"]:
-            wandbrun = wandb.init(
-                project = project,
-                notes=notes,
-                tags=["training", "no artifact"],
-                config=config,
-                entity='deekshith',
-                reinit=True,
-                name=f"{networkLabel}_{datetime.datetime.now()}"
-            )
     
     if args["pretrain"]:
         if args["multiprocessing_distributed"]:
@@ -158,8 +134,6 @@ def main():
         main_lincls.main_worker(args)
 
     print("DUNDANADUN")
-    if not args["pretrain"] and args["logtowandb"]:
-        wandbrun.finish()
 
 
 if __name__ == "__main__":
