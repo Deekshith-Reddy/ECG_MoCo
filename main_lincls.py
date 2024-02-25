@@ -86,8 +86,7 @@ def dataprep(args):
 
     return train_loaders, val_loader
 
-def main_worker(args):
-    
+def create_model(args):
     print("=> creating model '{}'".format("ECG Spatio Temporal"))
     model = Networks.ECG_SpatioTemporalNet(**parameters.spatioTemporalParams_v4, dim=1, mlp=args["mlp"])
     for name, param in model.named_parameters():
@@ -123,26 +122,16 @@ def main_worker(args):
         else:
             print("=> No checkpoint found at '{}'".format(args["pretrained"]))
 
-    
-    model = tch.nn.DataParallel(model, device_ids=gpuIds)   
-    print(model)
-    model.to(device) 
+    return model
+
+
+def main_worker(args):
+
+     
     
     # Data Loading
     train_loaders, val_loader = dataprep(args)
 
-    lossParams = args["lossParams"]
-
-
-    optimizer = tch.optim.SGD(
-        model.parameters(),
-        args["lr"],
-        momentum=args["momentum"],
-        weight_decay=args["weight_decay"]
-    )
-    
-    optimizer1 = tch.optim.Adam(model.parameters(), lr=lossParams['learningRate'])
-    
     logToWandB = args["logtowandb"]
     lossFun = T.loss_bce
 
@@ -153,6 +142,25 @@ def main_worker(args):
 
     for train_loader in train_loaders:
         print(f"Starting Finetuning with {len(train_loader.dataset)} patients")
+
+        model = create_model(args)   
+    
+        model = tch.nn.DataParallel(model, device_ids=gpuIds)   
+        print(model)
+        model.to(device)
+
+        lossParams = args["lossParams"]
+
+
+        optimizer = tch.optim.SGD(
+            model.parameters(),
+            args["lr"],
+            momentum=args["momentum"],
+            weight_decay=args["weight_decay"]
+        )
+        
+        optimizer1 = tch.optim.Adam(model.parameters(), lr=lossParams['learningRate'])
+    
 
         project = f"MLECG_MoCO_LVEF_CLASSIFICATION_{date}"
         notes = f"Classification"
@@ -184,7 +192,7 @@ def main_worker(args):
                         trainDataLoader=train_loader,
                         testDataLoader=val_loader,
                         numEpoch=args["finetuning_epochs"],
-                        optimizer=optimizer,
+                        optimizer=optimizer1,
                         lossFun=lossFun,
                         lossParams=lossParams,
                         modelSaveDir='models/',
