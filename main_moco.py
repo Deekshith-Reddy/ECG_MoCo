@@ -98,7 +98,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # WandB
     date = datetime.datetime.now().date()
 
-    project = f"MLECG_MoCO_LVEF_PRETRAIN"
+    project = f"MLECG_MoCO_LVEF_PRETRAIN_{date}"
     notes = "Pretrain"
     config = dict(
         batch_size = args["batch_size"],

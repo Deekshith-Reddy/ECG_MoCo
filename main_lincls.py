@@ -89,9 +89,9 @@ def dataprep(args):
 def main_worker(args):
     
     print("=> creating model '{}'".format("ECG Spatio Temporal"))
-    model = Networks.ECG_SpatioTemporalNet(**parameters.spatioTemporalParams_v4, dim=1)
+    model = Networks.ECG_SpatioTemporalNet(**parameters.spatioTemporalParams_v4, dim=1, mlp=args["mlp"])
     for name, param in model.named_parameters():
-        if name not in ["finalLayer.2.weight", "finalLayer.2.bas"]:
+        if not name.startswith("finalLayer."):
             param.requires_grad = not args["freeze_features"]
     
     if args["pretrained"]:
@@ -103,7 +103,7 @@ def main_worker(args):
             for k in list(state_dict.keys()):
                 # retain only encoder_q up to before the embedding layer
                 if k.startswith("module.encoder_q") and not k.startswith(
-                    "module.encoder_q.finalLayer.2."
+                    "module.encoder_q.finalLayer."
                 ):
                     # remove prefix
                     state_dict[k[len("module.encoder_q.") :]] = state_dict[k]
@@ -111,7 +111,13 @@ def main_worker(args):
                 del state_dict[k]
 
             msg = model.load_state_dict(state_dict, strict=False)
-            assert set(msg.missing_keys) == {'finalLayer.2.bias', 'finalLayer.2.weight'}
+            assert set(msg.missing_keys) == {'finalLayer.2.bias', 'finalLayer.2.weight'} if not args["mlp"] else {
+                 'finalLayer.2.weight', 'finalLayer.2.bias', 
+                 'finalLayer.4.weight', 'finalLayer.4.bias', 
+                 'finalLayer.6.weight', 'finalLayer.6.bias', 
+                 'finalLayer.8.weight', 'finalLayer.8.bias'
+
+            }
 
             print("=> loaded pre-trained model '{}'".format(args["pretrained"]))
         else:
@@ -143,16 +149,19 @@ def main_worker(args):
     #Training
     print("Starting Training")
 
+    date = datetime.datetime.now().date()
+
     for train_loader in train_loaders:
         print(f"Starting Finetuning with {len(train_loader.dataset)} patients")
 
-        project = f"MLECG_MoCO_LVEF_CLASSIFICATION"
+        project = f"MLECG_MoCO_LVEF_CLASSIFICATION_{date}"
         notes = f"Classification"
         config = dict(
             batch_size = args["batch_size"],
             learning_rate = args["lossParams"]["learningRate"],
             ngpus_per_node = tch.cuda.device_count(),
             epochs = args["finetuning_epochs"],
+            mlp = args["mlp"],
             freeze_features = args["freeze_features"],
             lr_schedule = args["schedule"],
             finetuning_examples = len(train_loader.dataset)
@@ -175,7 +184,7 @@ def main_worker(args):
                         trainDataLoader=train_loader,
                         testDataLoader=val_loader,
                         numEpoch=args["finetuning_epochs"],
-                        optimizer=optimizer1,
+                        optimizer=optimizer,
                         lossFun=lossFun,
                         lossParams=lossParams,
                         modelSaveDir='models/',

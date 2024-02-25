@@ -129,7 +129,7 @@ class ECG_SpatioTemporalNet(nn.Module):
     import torch as tch
     import torch.nn as nn
 
-    def __init__(self, temporalResidualBlockParams, spatialResidualBlockParams, firstLayerParams, lastLayerParams, integrationMethod='add',dim=128):
+    def __init__(self, temporalResidualBlockParams, spatialResidualBlockParams, firstLayerParams, lastLayerParams, integrationMethod='add',mlp=False, dim=128):
         super(ECG_SpatioTemporalNet, self).__init__()
         self.integrationMethod = integrationMethod
         self.firstLayer = nn.Sequential(
@@ -172,9 +172,26 @@ class ECG_SpatioTemporalNet(nn.Module):
         self.finalLayer = nn.Sequential(
             nn.AdaptiveAvgPool2d(lastLayerParams['maxPoolSize']),
             nn.Flatten(),
-            nn.Linear(in_features=lastLayerParams['maxPoolSize'][0] * lastLayerParams['maxPoolSize'][1] * integrationChannels,
-                      out_features = dim)
         )
+
+        if mlp:
+            self.finalLayer = nn.Sequential(
+                *self.finalLayer,
+                nn.Linear(in_features=lastLayerParams['maxPoolSize'][0] * lastLayerParams['maxPoolSize'][1] * integrationChannels,
+                      out_features = 1024),
+                nn.ReLU(inplace=True),
+                nn.Linear(in_features=1024, out_features=512),
+                nn.ReLU(inplace=True),
+                nn.Linear(in_features=512, out_features=128),
+                nn.ReLU(inplace=True),
+                nn.Linear(in_features=128, out_features=dim)
+            )
+        else:
+            self.finalLayer = nn.Sequential(
+                *self.finalLayer,
+                nn.Linear(in_features=lastLayerParams['maxPoolSize'][0] * lastLayerParams['maxPoolSize'][1] * integrationChannels,
+                      out_features = dim)
+            )
 
         if dim == 1:
             self.finalLayer = nn.Sequential(*self.finalLayer, nn.Sigmoid())
