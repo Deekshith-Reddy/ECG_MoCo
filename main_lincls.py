@@ -140,7 +140,7 @@ def main_worker(args):
 
     date = datetime.datetime.now().date()
 
-    for train_loader in train_loaders:
+    for i, train_loader in enumerate(train_loaders):
         print(f"Starting Finetuning with {len(train_loader.dataset)} patients")
 
         model = create_model(args)   
@@ -168,7 +168,7 @@ def main_worker(args):
             batch_size = args["batch_size"],
             learning_rate = args["lossParams"]["learningRate"],
             ngpus_per_node = tch.cuda.device_count(),
-            epochs = args["finetuning_epochs"],
+            epochs = args["finetuning_epochs"][i],
             mlp = args["mlp"],
             freeze_features = args["freeze_features"],
             lr_schedule = args["schedule"],
@@ -191,7 +191,7 @@ def main_worker(args):
                         network=model,
                         trainDataLoader=train_loader,
                         testDataLoader=val_loader,
-                        numEpoch=args["finetuning_epochs"],
+                        numEpoch=args["finetuning_epochs"][i],
                         optimizer=optimizer1,
                         lossFun=lossFun,
                         lossParams=lossParams,
