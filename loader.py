@@ -2,6 +2,8 @@ import random
 
 import torch as tch
 import torch.nn as nn
+import numpy as np
+from scipy.interpolate import interp1d
 
 
 class GuassianBlur(nn.Module):
@@ -62,6 +64,32 @@ class ZeroMask(nn.Module):
             X_masked[:, start_point:start_point + num_samples_mask] = 0
 
         return X_masked
+
+class RandomCropResize(tch.nn.Module):
+    def __init__(self, crop_length=1000, target_len=5000, interpolation='linear'):
+        super(RandomCropResize, self).__init__()
+        self.crop_length = crop_length
+        self.target_len = target_len
+        self.interpolation = interpolation
+
+    def forward(self, x):
+        if self.crop_length == 5000:
+            start_point = 0
+        else:
+            start_point = tch.randint(0, x.shape[1] - self.crop_length, size=(1,)).item()
+        
+        cropped_signal = x[:, start_point:start_point + self.crop_length]
+        num_leads, curr_len = cropped_signal.shape
+        resized_signal = tch.zeros((num_leads, self.target_len))
+
+        x_original = tch.linspace(0, 1, curr_len)
+        x_target = tch.linspace(0, 1, self.target_len)
+
+        for i in range(num_leads):
+            f = interp1d(x_original, cropped_signal[i], kind=self.interpolation)
+            resized_signal[i] = tch.tensor(f(x_target))
+        return resized_signal
+
 
 class Scaling(nn.Module):
     def __init__(self, p):

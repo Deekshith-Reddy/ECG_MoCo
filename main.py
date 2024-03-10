@@ -41,27 +41,35 @@ args = dict(
     world_size = -1,
     multiprocessing_distributed = True,
     dist_backend = "nccl",
+    workers = 32,
+    
     moco_dim = 128,
     moco_k = 65536,
     moco_m = 0.999,
     moco_t = 0.07,
-    mlp = False,
-    batch_size = 512,
-    workers = 32,
+    
+    batch_size = 256,
+    mlp = True,
+    logtowandb = True,
+
+    pretrain = False,
+    pretrain_epochs = 90,
     lr=0.03,
     momentum = 0.9,
     weight_decay = 1e-4,
-    start_epoch = 0,
-    lossParams = dict(learningRate = 1e-4, threshold=40., type='binary cross entropy'),
-    pretrain_epochs = 75,
-    finetuning_epochs = [20, 30, 30, 50, 70, 100],
-    cos = False,
-    schedule = [60, 120],
+    cos = True,
+    schedule = [30, 60],
     print_freq = 20,
+
+
+
+    
+    finetuning_epochs = [40, 30, 30, 30, 30, 20],
+    lossParams = dict(learningRate = 1e-4, threshold=40., type='binary cross entropy'),
+    start_epoch = 0,
     pretrained = 'checkpoints/checkpoint_0075.pth.tar',
-    pretrain = False,
     freeze_features = False,
-    logtowandb = True,
+    baseline = False,
 
 )
 

@@ -35,9 +35,7 @@ def dataprep(args):
         pre_train_patients = pickle.load(file)
 
     augmentation = [
-        loader.GuassianBlur(),
-        loader.Permutation(),
-        loader.ZeroMask()
+        loader.RandomCropResize(),
 
     ]
     augs = loader.TwoCropsTransform(transforms.Compose(augmentation))
@@ -164,7 +162,7 @@ def main_worker(gpu, ngpus_per_node, args):
     for epoch in range(args["pretrain_epochs"]):
         if args["distributed"]:
             pre_train_sampler.set_epoch(epoch)
-        adjust_learning_rate(optimizer, epoch, args)
+        lr = adjust_learning_rate(optimizer, epoch, args)
 
         losses, top1, top5 = train(pre_train_loader, model, criterion, optimizer, epoch, args)
 
@@ -186,7 +184,8 @@ def main_worker(gpu, ngpus_per_node, args):
                 'Epoch': epoch,
                 'loss': losses.avg,
                 'acc@1': top1.avg,
-                'acc@5': top5.avg
+                'acc@5': top5.avg,
+                'lr':lr,
             })
     if args["logtowandb"]:
         wandbrun.finish()
@@ -248,8 +247,10 @@ def adjust_learning_rate(optimizer, epoch, args):
     else:  # stepwise lr schedule
         for milestone in args["schedule"]:
             lr *= 0.1 if epoch >= milestone else 1.0
+    print(f"Learning Rate = {lr}")
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
+    return lr
 
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""

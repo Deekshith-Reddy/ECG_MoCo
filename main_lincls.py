@@ -44,7 +44,7 @@ def dataprep(args):
         pretrain_patients = pickle.load(file)
     
     num_classification_patients = len(pretrain_patients)
-    finetuning_ratios = [1.0, 0.75, 0.50, 0.10, 0.05, 0.01]
+    finetuning_ratios = [0.01, 0.05, 0.10, 0.50, 0.75, 1.0]
     num_finetuning = [int(num_classification_patients * r) for r in finetuning_ratios]
     print(f"Num of classifcation patients is {num_classification_patients} Patients split as {num_finetuning}")
     
@@ -89,6 +89,10 @@ def dataprep(args):
 def create_model(args):
     print("=> creating model '{}'".format("ECG Spatio Temporal"))
     model = Networks.ECG_SpatioTemporalNet(**parameters.spatioTemporalParams_v4, dim=1, mlp=args["mlp"])
+    
+    if args["baseline"]:
+        return model
+    
     for name, param in model.named_parameters():
         if not name.startswith("finalLayer."):
             param.requires_grad = not args["freeze_features"]
@@ -172,6 +176,7 @@ def main_worker(args):
             mlp = args["mlp"],
             freeze_features = args["freeze_features"],
             lr_schedule = args["schedule"],
+            baseline = args["baseline"],
             finetuning_examples = len(train_loader.dataset)
         )
         networkLabel = "Fine_tune_ECG_SpatialTemporalNet"
