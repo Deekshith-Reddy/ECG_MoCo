@@ -80,6 +80,76 @@ class PreTrainECGDatasetLoader(Dataset):
     def __len__(self):
         return len(self.fileList)
 
+class PatientECGDatasetLoader(Dataset):
+    
+    def __init__(self, baseDir='', patients=[], normalize=True, normMethod='0to1', rhythmType='Rhythm', numECGstoFind=1):
+        self.baseDir = baseDir
+        self.rhythmType = rhythmType
+        self.normalize = normalize
+        self.normMethod = normMethod
+        
+        if len(patients) == 0:
+            self.patients = os.listdir(baseDir)
+        else:
+            self.patients = patients
+        
+        if type(self.patients[0]) is not str:
+            self.patients = [str(pat) for pat in self.patients]
+        
+        if numECGstoFind == 'all':
+            self.uniquePatients = self.patients
+            for pat in self.uniquePatients:
+                ecgFiles = self.findEcgs(pat, 'all')
+        else:
+            self.fileList = []
+    
+    def findEcgs(self, patient, numberToFind=1):
+        patientInfoPath = os.path.join(self.basePath, self.patients[item], 'patientData.json')
+        patientInfo = json.load(open(patientInfoPath))
+        numberOfEcgs = patientInfo['numberOfECGs']
+
+        if(numberToFind == 1) | (numberOfEcgs == 1):
+            ecgPath = [os.path.join(patient,
+                                    'ecg_0',
+                                    f'{patientInfo["ecgFields"][0]}_{self.rhythmType}.npy')]
+        else:
+            ecgPath = []
+            for ecgIx in range(numberOfEcgs):
+                ecgPath.append(os.path.join(patient,
+                                            f'ecg_{ecgIx}',
+                                            f'{patientInfo["ecgFields"][ecgIx]}_{self.rhythmType}.npy'))
+        
+        return ecgPath
+    
+    def __getitem__(self, item):
+        patientInfoPath = os.path.join(self.baseDir, self.patients[item], 'patientData.json')
+        patientInfo = json.load(open(patientInfoPath))
+        ecgPath = os.path.join(self.baseDir,
+                               self.patients[item],
+                               'ecg_0',
+                               f'{patientInfo["ecgFileIds"][0]:05d}_{self.rhythmType}.npy')
+        ecgData = np.load(ecgPath)
+
+        ejectionFraction = tch.tensor(patientInfo['ejectionFraction'])
+        ecgs = tch.tensor(ecgData).float().unsqueeze(0)
+
+        if self.normalize:
+            if self.normMethod == '0to1':
+                if not tch.allclose(ecgs, tch.zeros_like(ecgs)):
+                    ecgs = ecgs - tch.min(ecgs)
+                    ecgs = ecgs / tch.max(ecgs)
+                else:
+                    print(f'All zero data for item {item}, {ecgPath}')
+        
+        if tch.any(tch.isnan(ecgs)):
+            print(f"NANs in the data for item {item}, {ecgPath}")
+            
+        
+        return ecgs, ejectionFraction
+    
+    def __len__(self):
+        return len(self.patients)
+
 
 class ECGDatasetLoader(Dataset):
     

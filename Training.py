@@ -115,6 +115,7 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
                     'Saved Best': saved,
                     'auc test': auc_test,
                     'auc train': auc_train,
+                    'Best AUC Test': best_auc_test,
                     'ROCs individual': plt
                 })
         elif problemType == 'Regression':

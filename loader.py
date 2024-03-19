@@ -66,19 +66,20 @@ class ZeroMask(nn.Module):
         return X_masked
 
 class RandomCropResize(tch.nn.Module):
-    def __init__(self, crop_length=1000, target_len=5000, interpolation='linear'):
+    def __init__(self, crop_length_range=(2500, 3500), target_len=3000, interpolation='linear'):
         super(RandomCropResize, self).__init__()
-        self.crop_length = crop_length
+        self.crop_length_range = crop_length_range
         self.target_len = target_len
         self.interpolation = interpolation
 
     def forward(self, x):
-        if self.crop_length == 5000:
+        crop_length = tch.randint(self.crop_length_range[0], self.crop_length_range[1], (1, ))[0]
+        if crop_length == 5000:
             start_point = 0
         else:
-            start_point = tch.randint(0, x.shape[1] - self.crop_length, size=(1,)).item()
+            start_point = tch.randint(0, x.shape[1] - crop_length, size=(1,)).item()
         
-        cropped_signal = x[:, start_point:start_point + self.crop_length]
+        cropped_signal = x[:, start_point:start_point + crop_length]
         num_leads, curr_len = cropped_signal.shape
         resized_signal = tch.zeros((num_leads, self.target_len))
 

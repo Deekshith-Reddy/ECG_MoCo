@@ -91,6 +91,7 @@ def create_model(args):
     model = Networks.ECG_SpatioTemporalNet(**parameters.spatioTemporalParams_v4, dim=1, mlp=args["mlp"])
     
     if args["baseline"]:
+        print("Preparing to Run Baseline without loading pre-trained weights")
         return model
     
     for name, param in model.named_parameters():
@@ -164,9 +165,12 @@ def main_worker(args):
         )
         
         optimizer1 = tch.optim.Adam(model.parameters(), lr=lossParams['learningRate'])
+
+        freeze = "_freeze" if args["freeze_features"] else ""
+        baseline = "_baseline" if args["baseline"] else ""
     
 
-        project = f"MLECG_MoCO_LVEF_CLASSIFICATION_{date}"
+        project = f"MLECG_MoCO_LVEF_CLASSIFICATION{freeze}{baseline}_{date}"
         notes = f"Classification"
         config = dict(
             batch_size = args["batch_size"],
@@ -177,7 +181,9 @@ def main_worker(args):
             freeze_features = args["freeze_features"],
             lr_schedule = args["schedule"],
             baseline = args["baseline"],
-            finetuning_examples = len(train_loader.dataset)
+            finetuning_examples = len(train_loader.dataset),
+            validation_examples = len(val_loader.dataset),
+            checkpoint = args["pretrained"]
         )
         networkLabel = "Fine_tune_ECG_SpatialTemporalNet"
 

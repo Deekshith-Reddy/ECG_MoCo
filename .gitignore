@@ -5,3 +5,5 @@
 /models
 /patient_splits
 /wandb
+/checks2.ipynb
+/networkVis.ipynb

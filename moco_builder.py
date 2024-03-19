@@ -34,12 +34,27 @@ class MoCo(nn.Module):
         self.encoder_k = base_encoder(**parameters.spatioTemporalParams_v4, dim=dim)
 
         if mlp:  # hack: brute-force replacement
-            dim_mlp = self.encoder_q.fc.weight.shape[1]
-            self.encoder_q.fc = nn.Sequential(
-                nn.Linear(dim_mlp, dim_mlp), nn.ReLU(), self.encoder_q.fc
+            dim_mlp = self.encoder_q.finalLayer[2].weight.shape[1]
+            
+            q_layer1 = self.encoder_q.finalLayer[0]
+            q_layer2 = self.encoder_q.finalLayer[1]
+            q_last = self.encoder_q.finalLayer[2]
+            
+            self.encoder_q.finalLayer = nn.Sequential(
+                q_layer1,
+                q_layer2,
+                nn.Linear(dim_mlp, dim_mlp), nn.ReLU(),
+                q_last
             )
-            self.encoder_k.fc = nn.Sequential(
-                nn.Linear(dim_mlp, dim_mlp), nn.ReLU(), self.encoder_k.fc
+
+            k_layer1 = self.encoder_k.finalLayer[0]
+            k_layer2 = self.encoder_k.finalLayer[1]
+            k_last = self.encoder_k.finalLayer[2]
+            self.encoder_k.finalLayer = nn.Sequential(
+                k_layer1,
+                k_layer2,
+                nn.Linear(dim_mlp, dim_mlp), nn.ReLU(),
+                k_last
             )
 
         for param_q, param_k in zip(

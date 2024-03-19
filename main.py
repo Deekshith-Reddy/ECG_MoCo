@@ -47,29 +47,29 @@ args = dict(
     moco_k = 65536,
     moco_m = 0.999,
     moco_t = 0.07,
-    
-    batch_size = 256,
-    mlp = True,
-    logtowandb = True,
+
 
     pretrain = False,
+    start_epoch = 0,
     pretrain_epochs = 90,
     lr=0.03,
     momentum = 0.9,
     weight_decay = 1e-4,
     cos = True,
+    checkpoint_freq = 15,
     schedule = [30, 60],
     print_freq = 20,
-
-
-
     
-    finetuning_epochs = [40, 30, 30, 30, 30, 20],
+    # finetuning_epochs = [40, 30, 30, 30, 30, 20],
+    finetuning_epochs = [60, 30, 30, 20, 20, 15],
     lossParams = dict(learningRate = 1e-4, threshold=40., type='binary cross entropy'),
-    start_epoch = 0,
-    pretrained = 'checkpoints/checkpoint_0075.pth.tar',
+    pretrained = 'checkpoints/checkpoint_0030.pth.tar',
     freeze_features = False,
     baseline = False,
+        
+    batch_size = 64,
+    mlp = False,
+    logtowandb = True,
 
 )
 

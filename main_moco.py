@@ -92,11 +92,15 @@ def main_worker(gpu, ngpus_per_node, args):
         args["mlp"],        
     )
     print(model)
+
+
+    # Data Loading
+    pre_train_sampler, pre_train_loader = dataprep(args)
     
     # WandB
     date = datetime.datetime.now().date()
 
-    project = f"MLECG_MoCO_LVEF_PRETRAIN_{date}"
+    project = f"MLECG_MoCO_LVEF_PRETRAIN"
     notes = "Pretrain"
     config = dict(
         batch_size = args["batch_size"],
@@ -105,11 +109,13 @@ def main_worker(gpu, ngpus_per_node, args):
         epochs = args["pretrain_epochs"],
         moco_dim = args["moco_dim"],
         moco_k = args["moco_k"],
+        pre_train_size = len(pre_train_loader.dataset),
+
         
     )
     networkLabel = "pre_train_ECG_SpatialTemporalNet"
     if not args["multiprocessing_distributed"] or (
-            args["multiprocessing_distributed"] and args["rank"] % ngpus_per_node == 0
+            args["multiprocessing_distributed"] and args["rank"] % ngpus_per_node == 0 and args["logtowandb"]
         ):
         if args["logtowandb"]:
             wandbrun = wandb.init(
@@ -119,7 +125,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 config=config,
                 entity='deekshith',
                 reinit=True,
-                name=f"{networkLabel}_{datetime.datetime.now()}"
+                name=f"{networkLabel}_{datetime.datetime.now()}",
         )
 
 
@@ -156,8 +162,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     cudnn.benchmark = True
 
-    # Data Loading
-    pre_train_sampler, pre_train_loader = dataprep(args)
+    
     
     for epoch in range(args["pretrain_epochs"]):
         if args["distributed"]:
@@ -169,7 +174,7 @@ def main_worker(gpu, ngpus_per_node, args):
         if not args["multiprocessing_distributed"] or (
             args["multiprocessing_distributed"] and args["rank"] % ngpus_per_node == 0
         ):
-            if (epoch + 1)% 15 == 0:
+            if (epoch + 1)% args["checkpoint_freq"] == 0:
                 save_checkpoint(
                     {
                         "epoch": epoch + 1,
@@ -187,7 +192,9 @@ def main_worker(gpu, ngpus_per_node, args):
                 'acc@5': top5.avg,
                 'lr':lr,
             })
-    if args["logtowandb"]:
+    if not args["multiprocessing_distributed"] or (
+            args["multiprocessing_distributed"] and args["rank"] % ngpus_per_node == 0 and args["logtowandb"]
+        ):
         wandbrun.finish()
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
