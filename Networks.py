@@ -29,7 +29,7 @@ class spatialResidualBlock(nn.Module):
         self.batchNorm2 = nn.BatchNorm2d(out_channels[1])
         self.relu = nn.ReLU(inplace=True)
         self.dropout = dropout
-        self.drop = nn.Dropout()
+        self.drop = nn.Dropout(0.0368)
 
         if in_channels[0] != out_channels[-1]:
             self.resampleInput = nn.Sequential(
@@ -89,7 +89,7 @@ class temporalResidualBlock(nn.Module):
         )
         self.relu = nn.ReLU(inplace=True)
         self.dropout = dropout
-        self.drop = nn.Dropout()
+        self.drop = nn.Dropout(p=0.0368)
         self.batchNorm1 = nn.BatchNorm2d(out_channels[0])
         self.batchNorm2 = nn.BatchNorm2d(out_channels[1])
 
@@ -129,9 +129,10 @@ class ECG_SpatioTemporalNet(nn.Module):
     import torch as tch
     import torch.nn as nn
 
-    def __init__(self, temporalResidualBlockParams, spatialResidualBlockParams, firstLayerParams, lastLayerParams, integrationMethod='add',mlp=False, dim=128):
+    def __init__(self, temporalResidualBlockParams, spatialResidualBlockParams, firstLayerParams, lastLayerParams, integrationMethod='add',mlp=False, dropout=True, dim=128):
         super(ECG_SpatioTemporalNet, self).__init__()
         self.integrationMethod = integrationMethod
+        self.dropout = dropout
         self.firstLayer = nn.Sequential(
             nn.Conv2d(
                 in_channels=firstLayerParams['in_channels'],
@@ -145,8 +146,8 @@ class ECG_SpatioTemporalNet(nn.Module):
             nn.MaxPool2d((1, firstLayerParams['maxPoolKernel']))
         )
 
-        self.residualBlocks_time = self._generateResidualBlocks(**temporalResidualBlockParams, blockType='Temporal')
-        self.residualBlocks_space = self._generateResidualBlocks(**spatialResidualBlockParams, blockType='Spatial')
+        self.residualBlocks_time = self._generateResidualBlocks(**temporalResidualBlockParams,  blockType='Temporal')
+        self.residualBlocks_space = self._generateResidualBlocks(**spatialResidualBlockParams,  blockType='Spatial')
 
         if self.integrationMethod == 'add':
             integrationChannels = temporalResidualBlockParams['out_channels'][-1][-1]
@@ -222,7 +223,8 @@ class ECG_SpatioTemporalNet(nn.Module):
                     out_channels=out_channels[layerIx],
                     kernel_size=kernel_size[layerIx],
                     bias=bias,
-                    padding=padding[layerIx]
+                    padding=padding[layerIx],
+                    dropout=dropout
                 ))
             
             if blockType == 'Spatial':
@@ -231,7 +233,8 @@ class ECG_SpatioTemporalNet(nn.Module):
                     out_channels=out_channels[layerIx],
                     kernel_size=kernel_size[layerIx],
                     bias=bias,
-                    padding=padding[layerIx]
+                    padding=padding[layerIx],
+                    dropout=dropout
 
                 ))
         return nn.Sequential(*layerList)

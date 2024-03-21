@@ -32,6 +32,27 @@ best_acc1 = 0
 device = tch.device("cuda" if tch.cuda.is_available() else "cpu")
 gpuIds = list(range(tch.cuda.device_count()))
 
+def label_ratio_f(dataset, args):
+    pos = 0
+    neg = 0
+    if not args["sex"]:
+        for ecg, param in dataset:
+            if param < 40:
+                pos+=1
+            else:
+                neg+=1
+        result = f"Positive LVEF(<40): {pos} and Negative LVEF: {neg}"
+    else:
+        for ecg, param in dataset:
+            if param == 1:
+                pos+=1
+            else:
+                neg+=1
+        result = f"Gender Male: {pos} and Gender Female: {neg}"
+        
+    print(result)
+    return result
+
 def dataprep(args):
     dataDir = '/usr/sci/cibc/Maprodxn/ClinicalECGData/LVEFCohort/pythonData/'
     normEcgs = False
@@ -44,8 +65,11 @@ def dataprep(args):
         pretrain_patients = pickle.load(file)
     
     num_classification_patients = len(pretrain_patients)
-    finetuning_ratios = [0.01, 0.05, 0.10, 0.50, 0.75, 1.0]
+    finetuning_ratios = args["finetuning_ratios"]
+    if args["sex"]:
+        finetuning_ratios = [1]
     num_finetuning = [int(num_classification_patients * r) for r in finetuning_ratios]
+    
     print(f"Num of classifcation patients is {num_classification_patients} Patients split as {num_finetuning}")
     
     random_seed_split = 1
@@ -59,7 +83,7 @@ def dataprep(args):
 
         finetuning_patients = pretrain_patients[finetuning_patient_indices].squeeze()
 
-        dataset = DataTools.ECGDatasetLoader(baseDir=dataDir, patients=finetuning_patients.tolist(), normalize=normEcgs)
+        dataset = DataTools.ECGDatasetLoaderv2(baseDir=dataDir, patients=finetuning_patients.tolist(), normalize=normEcgs, sex=args["sex"])
 
         loader = torch.utils.data.DataLoader(
         dataset,
@@ -73,7 +97,7 @@ def dataprep(args):
         dataset_lengths.append(len(dataset))
     
     validation_patients = validation_patients
-    validation_dataset = DataTools.ECGDatasetLoader(baseDir=dataDir, patients=validation_patients.tolist(), normalize=normEcgs)
+    validation_dataset = DataTools.ECGDatasetLoaderv2(baseDir=dataDir, patients=validation_patients.tolist(), normalize=normEcgs, sex=args["sex"])
     val_loader = torch.utils.data.DataLoader(
         validation_dataset,
         batch_size=args["batch_size"],
@@ -81,16 +105,17 @@ def dataprep(args):
         num_workers=args["workers"],
         pin_memory=True,
     )
-
+    validation_ratio = label_ratio_f(validation_dataset, args)
     print(f"Preparing finetuning with {dataset_lengths} number of ECGs and with {len(validation_dataset)} validation ECGs")
 
-    return train_loaders, val_loader
+    return train_loaders, val_loader, validation_ratio
+
 
 def create_model(args):
     print("=> creating model '{}'".format("ECG Spatio Temporal"))
     model = Networks.ECG_SpatioTemporalNet(**parameters.spatioTemporalParams_v4, dim=1, mlp=args["mlp"])
     
-    if args["baseline"]:
+    if args["sex"] or args["baseline"]:
         print("Preparing to Run Baseline without loading pre-trained weights")
         return model
     
@@ -135,7 +160,7 @@ def main_worker(args):
      
     
     # Data Loading
-    train_loaders, val_loader = dataprep(args)
+    train_loaders, val_loader, validation_ratio = dataprep(args)
 
     logToWandB = args["logtowandb"]
     lossFun = T.loss_bce
@@ -145,8 +170,10 @@ def main_worker(args):
 
     date = datetime.datetime.now().date()
 
+
     for i, train_loader in enumerate(train_loaders):
-        print(f"Starting Finetuning with {len(train_loader.dataset)} patients")
+        text = " for sex classification." if args["sex"] else ""
+        print(f"Starting Finetuning with {len(train_loader.dataset)} patients{text}")
 
         model = create_model(args)   
     
@@ -168,9 +195,10 @@ def main_worker(args):
 
         freeze = "_freeze" if args["freeze_features"] else ""
         baseline = "_baseline" if args["baseline"] else ""
-    
+        label = "_sex" if args["sex"] else "_LVEF"
+        
 
-        project = f"MLECG_MoCO_LVEF_CLASSIFICATION{freeze}{baseline}_{date}"
+        project = f"MLECG_MoCO{label}_CLASSIFICATION{freeze}{baseline}_{date}"
         notes = f"Classification"
         config = dict(
             batch_size = args["batch_size"],
@@ -181,6 +209,7 @@ def main_worker(args):
             freeze_features = args["freeze_features"],
             lr_schedule = args["schedule"],
             baseline = args["baseline"],
+            validation_ratio = validation_ratio,
             finetuning_examples = len(train_loader.dataset),
             validation_examples = len(val_loader.dataset),
             checkpoint = args["pretrained"]
@@ -214,7 +243,7 @@ def main_worker(args):
                     )
         if logToWandB:
             wandbrun.finish()
-    
+
 
 
 

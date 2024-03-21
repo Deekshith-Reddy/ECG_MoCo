@@ -10,8 +10,11 @@ bceLoss = nn.BCELoss()
 device = tch.device("cuda:0" if tch.cuda.is_available() else "cpu")
 
 
-def loss_bce(predictedVal, clinicalParam, lossParams):
-    clinicalParam = (clinicalParam < lossParams['threshold']).float()
+def loss_bce(predictedVal, clinicalParam, lossParams, args):
+    if args["sex"]:
+        clinicalParam = clinicalParam.float()      
+    else:
+        clinicalParam = (clinicalParam < lossParams['threshold']).float()
     return bceLoss(predictedVal, clinicalParam)
 
 def evaluate(network, dataloader, lossFun, lossParams, args, getNoise=False):
@@ -27,7 +30,7 @@ def evaluate(network, dataloader, lossFun, lossParams, args, getNoise=False):
             ecg = ecg.to(device)
             clinicalParam = clinicalParam.to(device).unsqueeze(1)
             predictedVal = network(ecg)
-            lossVal = lossFun(predictedVal, clinicalParam, lossParams)
+            lossVal = lossFun(predictedVal, clinicalParam, lossParams, args)
             running_loss += lossVal.item()
             allParams = tch.cat((allParams, clinicalParam.squeeze()))
             allPredictions = tch.cat((allPredictions, predictedVal.squeeze()))
@@ -47,7 +50,7 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
         count = 0
         for ecg, clinicalParam in trainDataLoader:
             print(f'Running through training batches {count} of {len(trainDataLoader)}', end='\r')
-
+            
             count += 1
             optimizer.zero_grad()
             currBatchSize = ecg.shape[0]
@@ -55,9 +58,8 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
             with tch.set_grad_enabled(True):
                 ecg = ecg.to(device)
                 clinicalParam = clinicalParam.to(device).unsqueeze(1)
-                
                 predictedVal = network(ecg)
-                lossVal = lossFun(predictedVal, clinicalParam, lossParams)
+                lossVal = lossFun(predictedVal, clinicalParam, lossParams, args)
                 lossVal.backward()
                 optimizer.step()
                 running_loss = running_loss + lossVal
@@ -71,9 +73,15 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
         print('Evalving Train')
         currTrainLoss, allParams_train, allPredictions_train, _ = evaluate(network, trainDataLoader, lossFun, lossParams, args)
         print(f"Train Loss: {currTrainLoss} \n Test Loss: {currTestLoss}")
-        allParams_train = (allParams_train.clone().detach().cpu() < lossParams['threshold']).long().numpy()
+        if args["sex"]:
+            allParams_train = allParams_train.clone().detach().cpu().long().numpy()
+        else:
+            allParams_train = (allParams_train.clone().detach().cpu() < lossParams['threshold']).long().numpy()
         allPredictions_train = allPredictions_train.clone().detach().cpu().numpy()
-        allParams_test = (allParams_test.clone().detach().cpu() < lossParams['threshold']).long().numpy()
+        if args["sex"]:
+            allParams_test = allParams_test.clone().detach().cpu().long().numpy()
+        else:
+            allParams_test = (allParams_test.clone().detach().cpu() < lossParams['threshold']).long().numpy()
         allPredictions_test = allPredictions_test.clone().detach().cpu().numpy()
 
         if problemType == 'Binary':
@@ -90,6 +98,15 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
             print('Saving Model')
             best_auc_test = auc_test
             best_model = copy.deepcopy(network.state_dict())
+            if args["sex"]:
+                state = {
+                        "epoch": ep + 1,
+                        "arch": "Spatio Temporal Net",
+                        "state_dict": network.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                }
+                filename=f"checkpoints/checkpoint_sex.pth.tar"
+                tch.save(state, filename)
             tch.save(best_model, modelSaveDir+label+'.pt')
             saved=1
         else:
@@ -142,3 +159,8 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
             print('Saving end Model')
             final_model = copy.deepcopy(network.state_dict())
             tch.save(final_model, modelSaveDir+label+'_final.pt')
+
+
+def save_checkpoint(state, is_best, filename="checkpoints/checkpoint.pth.tar"):
+    tch.save(state, filename)
+    

@@ -61,13 +61,15 @@ args = dict(
     print_freq = 20,
     
     # finetuning_epochs = [40, 30, 30, 30, 30, 20],
-    finetuning_epochs = [60, 30, 30, 20, 20, 15],
-    lossParams = dict(learningRate = 1e-4, threshold=40., type='binary cross entropy'),
-    pretrained = 'checkpoints/checkpoint_0030.pth.tar',
+    sex = True,
+    finetuning_ratios = [0.10],#[0.01, 0.05, 0.10, 0.50, 0.75, 1.0],
+    finetuning_epochs = [30, 30, 30, 20, 20, 15],
+    lossParams = dict(learningRate = 0.03929, threshold=40., type='binary cross entropy'),
+    pretrained = 'checkpoints/checkpoint_0090.pth.tar',
     freeze_features = False,
-    baseline = False,
+    baseline = True,
         
-    batch_size = 64,
+    batch_size = 512,
     mlp = False,
     logtowandb = True,
 
