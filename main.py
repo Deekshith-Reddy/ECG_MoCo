@@ -65,7 +65,7 @@ args = dict(
     lossParams = dict(learningRate = 1e-4, threshold=40., type='binary cross entropy'),
     pretrained = 'checkpoints/checkpoint_0030.pth.tar',
     freeze_features = False,
-    baseline = True,
+    baseline = False,
         
     batch_size = 64,
     mlp = False,
