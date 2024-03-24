@@ -39,7 +39,7 @@ def evaluate(network, dataloader, lossFun, lossParams, args, getNoise=False):
     return running_loss, allParams, allPredictions, allNoiseVals
 
 def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, lossFun, lossParams, modelSaveDir, label, args, logToWandB=True, problemType='Binary'):
-    print(f'Beginning Training for {label}')
+    print(f'Beginning Training for {label} with {len(trainDataLoader.dataset)} Examples')
     prevTrainingLoss = 0.0
     best_auc_test = 0.5
 
@@ -50,7 +50,6 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
         count = 0
         for ecg, clinicalParam in trainDataLoader:
             print(f'Running through training batches {count} of {len(trainDataLoader)}', end='\r')
-            
             count += 1
             optimizer.zero_grad()
             currBatchSize = ecg.shape[0]
@@ -63,7 +62,6 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
                 lossVal.backward()
                 optimizer.step()
                 running_loss = running_loss + lossVal
-
         currTrainingLoss = running_loss/len(trainDataLoader.dataset)
 
         print(f"Epoch {ep+1} train loss {currTrainingLoss}, Diff {currTrainingLoss - prevTrainingLoss}")

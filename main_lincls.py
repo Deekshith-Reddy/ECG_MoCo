@@ -70,9 +70,9 @@ def dataprep(args):
         finetuning_ratios = [1]
     num_finetuning = [int(num_classification_patients * r) for r in finetuning_ratios]
     
-    print(f"Num of classifcation patients is {num_classification_patients} Patients split as {num_finetuning}")
+    print(f"Num of classifcation patients is {num_classification_patients}, Patients split as {num_finetuning}")
     
-    random_seed_split = 1
+    random_seed_split = 42
     patientInds = list(range(num_classification_patients))
     random.Random(random_seed_split).shuffle(patientInds)
 
@@ -96,7 +96,6 @@ def dataprep(args):
         train_loaders.append(loader)
         dataset_lengths.append(len(dataset))
     
-    validation_patients = validation_patients
     validation_dataset = DataTools.ECGDatasetLoaderv2(baseDir=dataDir, patients=validation_patients.tolist(), normalize=normEcgs, sex=args["sex"])
     val_loader = torch.utils.data.DataLoader(
         validation_dataset,
@@ -129,15 +128,26 @@ def create_model(args):
             checkpoint = tch.load(args["pretrained"], map_location="cpu")
 
             state_dict = checkpoint["state_dict"]
-            for k in list(state_dict.keys()):
-                # retain only encoder_q up to before the embedding layer
-                if k.startswith("module.encoder_q") and not k.startswith(
-                    "module.encoder_q.finalLayer."
-                ):
-                    # remove prefix
-                    state_dict[k[len("module.encoder_q.") :]] = state_dict[k]
-                # delete renamed or unused k
-                del state_dict[k]
+            if args["pretrained"].find("sex") == -1:
+                for k in list(state_dict.keys()):
+                            # retain only encoder_q up to before the embedding layer
+                            if k.startswith("module.encoder_q") and not k.startswith(
+                                "module.encoder_q.finalLayer."
+                            ):
+                                # remove prefix
+                                state_dict[k[len("module.encoder_q.") :]] = state_dict[k]
+                            # delete renamed or unused k
+                            del state_dict[k]
+            else:
+                for k in list(state_dict.keys()):
+                            # retain only encoder_q up to before the embedding layer
+                            if k.startswith("module.") and not k.startswith(
+                                "module.finalLayer."
+                            ):
+                                # remove prefix
+                                state_dict[k[len("module.") :]] = state_dict[k]
+                            # delete renamed or unused k
+                            del state_dict[k]
 
             msg = model.load_state_dict(state_dict, strict=False)
             assert set(msg.missing_keys) == {'finalLayer.2.bias', 'finalLayer.2.weight'} if not args["mlp"] else {
@@ -156,9 +166,6 @@ def create_model(args):
 
 
 def main_worker(args):
-
-     
-    
     # Data Loading
     train_loaders, val_loader, validation_ratio = dataprep(args)
 
@@ -176,9 +183,9 @@ def main_worker(args):
         print(f"Starting Finetuning with {len(train_loader.dataset)} patients{text}")
 
         model = create_model(args)   
-    
+        print(model.finalLayer)
         model = tch.nn.DataParallel(model, device_ids=gpuIds)   
-        print(model)
+        
         model.to(device)
 
         lossParams = args["lossParams"]
@@ -195,10 +202,12 @@ def main_worker(args):
 
         freeze = "_freeze" if args["freeze_features"] else ""
         baseline = "_baseline" if args["baseline"] else ""
-        label = "_sex" if args["sex"] else "_LVEF"
+        label = "_SEX" if args["sex"] else "_LVEF"
+
+        on_sex = "_ON_SEX" if args["pretrained"].find("sex") != -1 and not args["baseline"] else "_ON_MoCo"
         
 
-        project = f"MLECG_MoCO{label}_CLASSIFICATION{freeze}{baseline}_{date}"
+        project = f"MLECG_MoCO{label}_CLASSIFICATION{on_sex}{freeze}{baseline}_{date}"
         notes = f"Classification"
         config = dict(
             batch_size = args["batch_size"],
@@ -212,9 +221,10 @@ def main_worker(args):
             validation_ratio = validation_ratio,
             finetuning_examples = len(train_loader.dataset),
             validation_examples = len(val_loader.dataset),
-            checkpoint = args["pretrained"]
+            checkpoint = args["pretrained"],
+            seed = args["seed"]
         )
-        networkLabel = "Fine_tune_ECG_SpatialTemporalNet"
+        networkLabel = "ECG_SpatialTemporalNet"
 
         if logToWandB:
             wandbrun = wandb.init(
@@ -236,7 +246,7 @@ def main_worker(args):
                         lossFun=lossFun,
                         lossParams=lossParams,
                         modelSaveDir='models/',
-                        label='networkLabel',
+                        label=networkLabel,
                         args=args,
                         logToWandB=logToWandB,
                         problemType='Binary'

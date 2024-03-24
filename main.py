@@ -35,7 +35,7 @@ os.environ['MASTER_ADDR'] = 'localhost'
 os.environ['MASTER_PORT'] = '12345'
 
 args = dict(
-    seed = None,
+    seed = 42,
     gpu = None,
     dist_url = "env://",
     world_size = -1,
@@ -61,15 +61,15 @@ args = dict(
     print_freq = 20,
     
     # finetuning_epochs = [40, 30, 30, 30, 30, 20],
-    sex = True,
-    finetuning_ratios = [0.10],#[0.01, 0.05, 0.10, 0.50, 0.75, 1.0],
-    finetuning_epochs = [30, 30, 30, 20, 20, 15],
-    lossParams = dict(learningRate = 0.03929, threshold=40., type='binary cross entropy'),
-    pretrained = 'checkpoints/checkpoint_0090.pth.tar',
+    sex = False,
+    finetuning_ratios = [0.005, 0.01, 0.05, 0.10, 0.5, 1.0],
+    finetuning_epochs = [50, 40, 35, 20, 20, 15],
+    lossParams = dict(learningRate = 1e-4, threshold=40., type='binary cross entropy'),
+    pretrained = 'checkpoints/checkpoint_sex.pth.tar',
     freeze_features = False,
     baseline = True,
         
-    batch_size = 512,
+    batch_size = 256,
     mlp = False,
     logtowandb = True,
 
