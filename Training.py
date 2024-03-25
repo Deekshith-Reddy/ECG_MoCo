@@ -5,13 +5,17 @@ import copy
 from sklearn import metrics
 import matplotlib.pyplot as plt
 import numpy as np
+import math
 
 bceLoss = nn.BCELoss()
 device = tch.device("cuda:0" if tch.cuda.is_available() else "cpu")
 
 
-def loss_bce(predictedVal, clinicalParam, lossParams):
-    clinicalParam = (clinicalParam < lossParams['threshold']).float()
+def loss_bce(predictedVal, clinicalParam, lossParams, args):
+    if args["sex_classification"]:
+        clinicalParam = clinicalParam.float()
+    else:
+        clinicalParam = (clinicalParam < lossParams['threshold']).float()
     return bceLoss(predictedVal, clinicalParam)
 
 def evaluate(network, dataloader, lossFun, lossParams, args, getNoise=False):
@@ -27,7 +31,7 @@ def evaluate(network, dataloader, lossFun, lossParams, args, getNoise=False):
             ecg = ecg.to(device)
             clinicalParam = clinicalParam.to(device).unsqueeze(1)
             predictedVal = network(ecg)
-            lossVal = lossFun(predictedVal, clinicalParam, lossParams)
+            lossVal = lossFun(predictedVal, clinicalParam, lossParams, args)
             running_loss += lossVal.item()
             allParams = tch.cat((allParams, clinicalParam.squeeze()))
             allPredictions = tch.cat((allPredictions, predictedVal.squeeze()))
@@ -42,6 +46,7 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
 
     for ep in range(numEpoch):
         print(f'Epoch {ep+1} of {numEpoch}')
+        lr = adjust_learning_rate(optimizer=optimizer, epoch=ep, numEpochs=numEpoch, args=args)
         running_loss = 0.0
         network.train()
         count = 0
@@ -57,10 +62,11 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
                 clinicalParam = clinicalParam.to(device).unsqueeze(1)
                 
                 predictedVal = network(ecg)
-                lossVal = lossFun(predictedVal, clinicalParam, lossParams)
+                lossVal = lossFun(predictedVal, clinicalParam, lossParams, args)
                 lossVal.backward()
                 optimizer.step()
                 running_loss = running_loss + lossVal
+            
 
         currTrainingLoss = running_loss/len(trainDataLoader.dataset)
 
@@ -71,9 +77,15 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
         print('Evalving Train')
         currTrainLoss, allParams_train, allPredictions_train, _ = evaluate(network, trainDataLoader, lossFun, lossParams, args)
         print(f"Train Loss: {currTrainLoss} \n Test Loss: {currTestLoss}")
-        allParams_train = (allParams_train.clone().detach().cpu() < lossParams['threshold']).long().numpy()
+        if args["sex_classification"]:
+            allParams_train = allParams_train.clone().detach().cpu().long().numpy()
+        else:
+            allParams_train = (allParams_train.clone().detach().cpu() < lossParams['threshold']).long().numpy()
         allPredictions_train = allPredictions_train.clone().detach().cpu().numpy()
-        allParams_test = (allParams_test.clone().detach().cpu() < lossParams['threshold']).long().numpy()
+        if args["sex_classification"]:
+            allParams_test = allParams_test.clone().detach().cpu().long().numpy()
+        else:
+            allParams_test = (allParams_test.clone().detach().cpu() < lossParams['threshold']).long().numpy()
         allPredictions_test = allPredictions_test.clone().detach().cpu().numpy()
 
         if problemType == 'Binary':
@@ -90,6 +102,15 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
             print('Saving Model')
             best_auc_test = auc_test
             best_model = copy.deepcopy(network.state_dict())
+            if args["sex_classification"]:
+                state = {
+                    "epoch": ep + 1,
+                    "arch": "Spatio Temporal Net",
+                    "state_dict": network.state_dict(),
+                    "optimizer": optimizer.state_dict()
+                }
+                filename = f"checkpoints/checkpoint_sex.pth.tar"
+                tch.save(state, filename)
             tch.save(best_model, modelSaveDir+label+'.pt')
             saved=1
         else:
@@ -116,6 +137,7 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
                     'auc test': auc_test,
                     'auc train': auc_train,
                     'Best AUC Test': best_auc_test,
+                    'learning_rate': lr,
                     'ROCs individual': plt
                 })
         elif problemType == 'Regression':
@@ -142,3 +164,16 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
             print('Saving end Model')
             final_model = copy.deepcopy(network.state_dict())
             tch.save(final_model, modelSaveDir+label+'_final.pt')
+
+def adjust_learning_rate(optimizer, epoch, numEpochs, args):
+    """Decay the learning rate based on schedule"""
+    lr = args["lossParams"]["learningRate"]
+    if args["cos"]:  # cosine lr schedule
+        lr *= 0.5 * (1.0 + math.cos(math.pi * epoch / numEpochs))
+    else:  # stepwise lr schedule
+        for milestone in args["schedule"]:
+            lr *= 0.1 if epoch >= milestone else 1.0
+    print(f"Learning Rate = {lr}")
+    for param_group in optimizer.param_groups:
+        param_group["lr"] = lr
+    return lr

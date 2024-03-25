@@ -1,24 +1,12 @@
-import argparse
-import builtins
 import os
 import random
-import shutil
-import time
-import warnings
 import datetime
 
 import torch as tch
-import torch.backends.cudnn as cudnn
-import torch.distributed as dist
-import torch.multiprocessing as mp
-import torch.nn as nn
 import torch.nn.parallel
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
-import torchvision.datasets as datasets
-import torchvision.models as models
-import torchvision.transforms as transforms
 import pickle
 import wandb
 
@@ -28,7 +16,6 @@ import DataTools
 import Training as T
 
 
-best_acc1 = 0
 device = tch.device("cuda" if tch.cuda.is_available() else "cpu")
 gpuIds = list(range(tch.cuda.device_count()))
 
@@ -44,7 +31,7 @@ def dataprep(args):
         pretrain_patients = pickle.load(file)
     
     num_classification_patients = len(pretrain_patients)
-    finetuning_ratios = [0.01, 0.05, 0.10, 0.50, 0.75, 1.0]
+    finetuning_ratios = args["finetuning_ratios"]
     num_finetuning = [int(num_classification_patients * r) for r in finetuning_ratios]
     print(f"Num of classifcation patients is {num_classification_patients} Patients split as {num_finetuning}")
     
@@ -104,15 +91,26 @@ def create_model(args):
             checkpoint = tch.load(args["pretrained"], map_location="cpu")
 
             state_dict = checkpoint["state_dict"]
-            for k in list(state_dict.keys()):
-                # retain only encoder_q up to before the embedding layer
-                if k.startswith("module.encoder_q") and not k.startswith(
-                    "module.encoder_q.finalLayer."
-                ):
-                    # remove prefix
-                    state_dict[k[len("module.encoder_q.") :]] = state_dict[k]
-                # delete renamed or unused k
-                del state_dict[k]
+            if args["pretrained"].find("sex") == -1:
+                for k in list(state_dict.keys()):
+                            # retain only encoder_q up to before the embedding layer
+                            if k.startswith("module.encoder_q") and not k.startswith(
+                                "module.encoder_q.finalLayer."
+                            ):
+                                # remove prefix
+                                state_dict[k[len("module.encoder_q.") :]] = state_dict[k]
+                            # delete renamed or unused k
+                            del state_dict[k]
+            else:
+                for k in list(state_dict.keys()):
+                            # retain only encoder_q up to before the embedding layer
+                            if k.startswith("module.") and not k.startswith(
+                                "module.finalLayer."
+                            ):
+                                # remove prefix
+                                state_dict[k[len("module.") :]] = state_dict[k]
+                            # delete renamed or unused k
+                            del state_dict[k]
 
             msg = model.load_state_dict(state_dict, strict=False)
             assert set(msg.missing_keys) == {'finalLayer.2.bias', 'finalLayer.2.weight'} if not args["mlp"] else {
@@ -168,9 +166,11 @@ def main_worker(args):
 
         freeze = "_freeze" if args["freeze_features"] else ""
         baseline = "_baseline" if args["baseline"] else ""
+        MoCo = "_MoCo" if args["pretrained"].find("sex") == -1 else ""
+        on_sex = "" if args["pretrained"].find("sex") == -1 else "_ON_SEX"
     
 
-        project = f"MLECG_MoCO_LVEF_CLASSIFICATION{freeze}{baseline}_{date}"
+        project = f"MLECG_{MoCo}_LVEF_CLASSIFICATION{freeze}{baseline}{on_sex}_{date}"
         notes = f"Classification"
         config = dict(
             batch_size = args["batch_size"],
@@ -195,7 +195,7 @@ def main_worker(args):
                 config=config,
                 entity='deekshith',
                 reinit=True,
-                name=f"{networkLabel}_{len(train_loader.dataset)}_{datetime.datetime.now()}"
+                name=f"{networkLabel}_{len(train_loader.dataset)}_{datetime.datetime.now()}",
             )
 
         T.trainNetwork(
@@ -207,7 +207,7 @@ def main_worker(args):
                         lossFun=lossFun,
                         lossParams=lossParams,
                         modelSaveDir='models/',
-                        label='networkLabel',
+                        label=networkLabel,
                         args=args,
                         logToWandB=logToWandB,
                         problemType='Binary'

@@ -26,6 +26,7 @@ import Networks
 import moco_builder
 import main_moco
 import main_lincls
+import sex_classifcation
 
 os.environ["WANDB_API_KEY"] = "e56acefffc20a7f826010f436f392b067f4e0ae5"
 device = tch.device("cuda" if tch.cuda.is_available() else "cpu")
@@ -59,17 +60,34 @@ args = dict(
     checkpoint_freq = 15,
     schedule = [30, 60],
     print_freq = 20,
+
+    sex_classification = False,
     
     # finetuning_epochs = [40, 30, 30, 30, 30, 20],
-    finetuning_epochs = [60, 30, 30, 20, 20, 15],
+    finetuning_epochs = [100, 80, 50, 40, 30, 30],
+    finetuning_ratios = [0.005, 0.01, 0.05, 0.10, 0.5, 1.0],
     lossParams = dict(learningRate = 1e-4, threshold=40., type='binary cross entropy'),
-    pretrained = 'checkpoints/checkpoint_0030.pth.tar',
+    pretrained = 'checkpoints/checkpoint_sex.pth.tar',
     freeze_features = False,
     baseline = False,
         
     batch_size = 64,
     mlp = False,
     logtowandb = True,
+
+)
+
+sex_args = dict (
+    sex_classification=True,
+    batch_size = 256,
+    workers = 32,
+    logtowandb=True,
+    lossParams = dict(learningRate = 1e-4, threshold=40., type='binary cross entropy'),
+
+    mlp=False,
+    num_epochs=25,
+    schedule=[10, 20],
+    cos=True,
 
 )
 
@@ -138,6 +156,8 @@ def main():
         else:
             # Simply call main_worker function
             main_moco.main_worker(args.gpu, ngpus_per_node, args)
+    elif args["sex_classification"]:
+        sex_classifcation.main_worker(sex_args)
     else:
         main_lincls.main_worker(args)
 
