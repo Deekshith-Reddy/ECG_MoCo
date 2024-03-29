@@ -15,7 +15,7 @@ This is the noise that we add to the original ECG to "jitter" it produces the si
 
 
 
-### GaussianBlur
+#### GaussianBlur
 
 This augmentation is made by using scipy's gaussian_filter function where a gaussian kernel is created with a randomly picked standard deviation uniformly from the range(0.1, 0.25)
 
