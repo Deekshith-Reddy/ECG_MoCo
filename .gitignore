@@ -1,9 +1,11 @@
 /.ipynb_checkpoints
 /__pycache__
 /checkpoints
+/notebooks
 /checks.ipynb
 /models
 /patient_splits
 /wandb
 /checks2.ipynb
 /networkVis.ipynb
+/augmentations.ipynb

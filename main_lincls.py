@@ -165,9 +165,9 @@ def main_worker(args):
         optimizer1 = tch.optim.Adam(model.parameters(), lr=lossParams['learningRate'])
 
         freeze = "_freeze" if args["freeze_features"] else ""
-        baseline = "_baseline" if args["baseline"] else ""
+        baseline = "_baseline" if args["baseline"]  else ""
         MoCo = "_MoCo" if args["pretrained"].find("sex") == -1 else ""
-        on_sex = "" if args["pretrained"].find("sex") == -1 else "_ON_SEX"
+        on_sex = "" if args["pretrained"].find("sex") == -1 and not args["baseline"] else "_ON_SEX"
     
 
         project = f"MLECG_{MoCo}_LVEF_CLASSIFICATION{freeze}{baseline}{on_sex}_{date}"

@@ -4,19 +4,67 @@ import torch as tch
 import torch.nn as nn
 import numpy as np
 from scipy.interpolate import interp1d
+from scipy.ndimage import gaussian_filter
+from scipy.interpolate import CubicSpline
 
-
-class GuassianBlur(nn.Module):
+# Jittering
+class GuassianNoise(nn.Module):
     def __init__(self, std_dev=(0.1, 0.25), mean=0):
-        super(GuassianBlur, self).__init__()
+        super(GuassianNoise, self).__init__()
         self.std_dev = std_dev
         self.mean = mean
     
     def forward(self ,x):
-        sig = random.uniform(0.1, 0.25)
-        noise = tch.randn(x.shape) * sig + self.mean
-        return x + noise
+        sig = random.uniform(self.std_dev[0], self.std_dev[1])
+        self.noise = tch.randn(x.shape) * sig + self.mean
+        return x + self.noise
 
+# Blur  
+class GaussianBlur(nn.Module):
+    def __init__(self, sigma=(0.1, 0.25)):
+        super(GaussianBlur, self).__init__()
+        self.sigma = sigma
+        
+    def forward(self, x):
+        sig = random.uniform(self.sigma[0], self.sigma[1])
+        return tch.tensor(gaussian_filter(x, sig))
+
+
+# Scaling
+class Scaling(nn.Module):
+    def __init__(self, sigma=(0.1, 0.25), mean=1):
+        super(Scaling, self).__init__()
+        self.sigma = sigma
+        self.mean = mean
+        
+    
+    def forward(self ,x):
+        self.std = random.uniform(self.sigma[0], self.sigma[1])
+        self.amp = tch.randn((1, 5000)) * self.std + self.mean
+        return x * self.amp
+
+
+# Magnitude Warping
+class MagnitudeWarping(nn.Module):
+    def __init__(self, knots=10, mean=1, sigma=(0.1, 0.25)):
+        super(MagnitudeWarping, self).__init__()
+        self.knots = knots
+        self.mean = mean
+        self.sigma = sigma
+    
+    def forward(self, x):
+        self.std = random.uniform(self.sigma[0], self.sigma[1])
+
+        knot_indexes = np.linspace(0, x.shape[-1], self.knots, dtype=int)
+        knot_values = np.random.normal(1, self.std, self.knots)
+
+        spline = CubicSpline(knot_indexes, knot_values)
+        self.warping = tch.tensor(spline(np.arange(x.shape[-1])))
+
+        return x * self.warping
+
+
+# Permutation
 class Permutation(nn.Module):
     def __init__(self, p=(4, 10), leadbylead=True):
         super(Permutation, self).__init__()
@@ -43,30 +91,9 @@ class Permutation(nn.Module):
 
         return permuted_signal
 
-class ZeroMask(nn.Module):
-    def __init__(self, r=0.4, leadbylead=True):
-        super(ZeroMask, self).__init__()
-        self.r = r
-        self.leadbylead = leadbylead
-    
-    def forward(self ,x):
-        leads, L = x.shape
-        num_samples_mask = int(self.r * L)
-
-        X_masked = x.clone()
-        
-        if self.leadbylead:
-            for lead in range(leads):
-                start_point = tch.randint(0, L - num_samples_mask + 1, (1,)).item()
-                X_masked[lead, start_point:start_point + num_samples_mask] = 0
-        else:
-            start_point = tch.randint(0, L - num_samples_mask + 1, (1,)).item()
-            X_masked[:, start_point:start_point + num_samples_mask] = 0
-
-        return X_masked
-
+# Window Slicing
 class RandomCropResize(tch.nn.Module):
-    def __init__(self, crop_length_range=(2500, 3500), target_len=3000, interpolation='linear'):
+    def __init__(self, crop_length_range=(4000, 5000), target_len=4500, interpolation='linear'):
         super(RandomCropResize, self).__init__()
         self.crop_length_range = crop_length_range
         self.target_len = target_len
@@ -91,20 +118,49 @@ class RandomCropResize(tch.nn.Module):
             resized_signal[i] = tch.tensor(f(x_target))
         return resized_signal
 
-
-class Scaling(nn.Module):
-    def __init__(self, p):
-        print(p)
-    
-    def forward(self ,x):
-        return x
-
+# Time Warping
 class TimeWarping(nn.Module):
     def __init__(self, p):
         print(p)
 
     def forward(self ,x):
         return x
+
+# Window Warping
+class WindowWarping(nn.Module):
+    def __init__(self):
+        super(WindowWarping, self).__init__()
+    
+    def forward(self, x):
+        return x
+
+
+
+class ZeroMask(nn.Module):
+    def __init__(self, r=0.4, leadbylead=True):
+        super(ZeroMask, self).__init__()
+        self.r = r
+        self.leadbylead = leadbylead
+    
+    def forward(self ,x):
+        leads, L = x.shape
+        num_samples_mask = int(self.r * L)
+
+        X_masked = x.clone()
+        
+        if self.leadbylead:
+            for lead in range(leads):
+                start_point = tch.randint(0, L - num_samples_mask + 1, (1,)).item()
+                X_masked[lead, start_point:start_point + num_samples_mask] = 0
+        else:
+            start_point = tch.randint(0, L - num_samples_mask + 1, (1,)).item()
+            X_masked[:, start_point:start_point + num_samples_mask] = 0
+
+        return X_masked
+
+
+
+
 
 
 class TwoCropsTransform:

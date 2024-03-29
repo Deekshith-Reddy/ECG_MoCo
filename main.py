@@ -50,13 +50,12 @@ args = dict(
     moco_t = 0.07,
 
 
-    pretrain = False,
+    pretrain = True,
     start_epoch = 0,
     pretrain_epochs = 90,
     lr=0.03,
     momentum = 0.9,
     weight_decay = 1e-4,
-    cos = True,
     checkpoint_freq = 15,
     schedule = [30, 60],
     print_freq = 20,
@@ -64,9 +63,9 @@ args = dict(
     sex_classification = False,
     
     # finetuning_epochs = [40, 30, 30, 30, 30, 20],
-    finetuning_epochs = [100, 80, 50, 40, 30, 30],
+    finetuning_epochs = [200, 150, 150, 80, 50, 50],
     finetuning_ratios = [0.005, 0.01, 0.05, 0.10, 0.5, 1.0],
-    lossParams = dict(learningRate = 1e-4, threshold=40., type='binary cross entropy'),
+    lossParams = dict(learningRate = 3*1e-6, threshold=40., type='binary cross entropy'),
     pretrained = 'checkpoints/checkpoint_sex.pth.tar',
     freeze_features = False,
     baseline = False,
@@ -74,6 +73,8 @@ args = dict(
     batch_size = 64,
     mlp = False,
     logtowandb = True,
+    cos = True,
+
 
 )
 
