@@ -15,8 +15,8 @@ class GuassianNoise(nn.Module):
         self.mean = mean
     
     def forward(self ,x):
-        sig = random.uniform(self.std_dev[0], self.std_dev[1])
-        self.noise = tch.randn(x.shape) * sig + self.mean
+        self.sig = random.uniform(self.std_dev[0], self.std_dev[1])
+        self.noise = tch.randn(x.shape) * self.sig + self.mean
         return x + self.noise
 
 # Blur  
@@ -26,8 +26,8 @@ class GaussianBlur(nn.Module):
         self.sigma = sigma
         
     def forward(self, x):
-        sig = random.uniform(self.sigma[0], self.sigma[1])
-        return tch.tensor(gaussian_filter(x, sig))
+        self.sig = random.uniform(self.sigma[0], self.sigma[1])
+        return tch.tensor(gaussian_filter(x, self.sig))
 
 
 # Scaling
