@@ -21,7 +21,7 @@ class GuassianNoise(nn.Module):
 
 # Blur  
 class GaussianBlur(nn.Module):
-    def __init__(self, sigma=(0.1, 0.25)):
+    def __init__(self, sigma=(0.5, 0.75)):
         super(GaussianBlur, self).__init__()
         self.sigma = sigma
         
