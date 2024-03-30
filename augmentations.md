@@ -17,7 +17,7 @@ This is the noise that we add to the original ECG to "jitter" it produces the si
 
 ### GaussianBlur
 
-This augmentation is made by using scipy's gaussian_filter function where a gaussian kernel is created with a randomly picked standard deviation uniformly from the range(0.1, 0.25)
+This augmentation is made by using scipy's gaussian_filter function where a gaussian kernel is created with a randomly picked standard deviation uniformly from the range(0.5, 0.75)
 
 
 ![Gaussian Blur Comparison](/images/GaussianBlur_comparison.png "Gaussian Blur Comparison with original ECG")
@@ -25,7 +25,7 @@ This augmentation is made by using scipy's gaussian_filter function where a gaus
 
 ### Scaling
 
-A random standard deviation between 0.1 and 0.25 is uniformly picked and with a mean 1 and we create magnitudes for each time instance in the gaussian distribution with standard deviation, mean and the magnitudes are *multiplied* to the ecg
+A random standard deviation between 0.15 and 0.35 is uniformly picked and with a mean 1 and we create magnitudes for each time instance in the gaussian distribution with standard deviation, mean and the magnitudes are *multiplied* to the ecg
 
 ![Scaling Magnitude](/images/Scaling.png "Scaling Magnitude")
 

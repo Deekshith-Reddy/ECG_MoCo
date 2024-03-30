@@ -8,9 +8,9 @@ from scipy.ndimage import gaussian_filter
 from scipy.interpolate import CubicSpline
 
 # Jittering
-class GuassianNoise(nn.Module):
+class GaussianNoise(nn.Module):
     def __init__(self, std_dev=(0.1, 0.25), mean=0):
-        super(GuassianNoise, self).__init__()
+        super(GaussianNoise, self).__init__()
         self.std_dev = std_dev
         self.mean = mean
     
