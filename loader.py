@@ -9,51 +9,55 @@ from scipy.interpolate import CubicSpline
 
 # Jittering
 class GaussianNoise(nn.Module):
-    def __init__(self, std_dev=(0.1, 0.25), mean=0):
+    def __init__(self, sigma=0.3, mean=0):
         super(GaussianNoise, self).__init__()
-        self.std_dev = std_dev
+        self.sigma = sigma
         self.mean = mean
     
     def forward(self ,x):
-        self.sig = random.uniform(self.std_dev[0], self.std_dev[1])
+        # self.sig = random.uniform(self.std_dev[0], self.std_dev[1])
+        self.sig = self.sigma
         self.noise = tch.randn(x.shape) * self.sig + self.mean
         return x + self.noise
 
 # Blur  
 class GaussianBlur(nn.Module):
-    def __init__(self, sigma=(0.5, 0.75)):
+    def __init__(self, sigma=0.6):
         super(GaussianBlur, self).__init__()
         self.sigma = sigma
         
     def forward(self, x):
-        self.sig = random.uniform(self.sigma[0], self.sigma[1])
+        # self.sig = random.uniform(self.sigma[0], self.sigma[1])
+        self.sig = self.sigma
         return tch.tensor(gaussian_filter(x, self.sig))
 
 
 # Scaling
 class Scaling(nn.Module):
-    def __init__(self, sigma=(0.1, 0.25), mean=1):
+    def __init__(self, sigma=0.2, mean=1):
         super(Scaling, self).__init__()
         self.sigma = sigma
         self.mean = mean
         
     
     def forward(self ,x):
-        self.std = random.uniform(self.sigma[0], self.sigma[1])
+        # self.std = random.uniform(self.sigma[0], self.sigma[1])
+        self.std = self.sigma
         self.amp = tch.randn((1, 5000)) * self.std + self.mean
         return x * self.amp
 
 
 # Magnitude Warping
 class MagnitudeWarping(nn.Module):
-    def __init__(self, knots=10, mean=1, sigma=(0.1, 0.25)):
+    def __init__(self, knots=10, mean=1, sigma=0.2):
         super(MagnitudeWarping, self).__init__()
         self.knots = knots
         self.mean = mean
         self.sigma = sigma
     
     def forward(self, x):
-        self.std = random.uniform(self.sigma[0], self.sigma[1])
+        # self.std = random.uniform(self.sigma[0], self.sigma[1])
+        self.std = self.sigma
 
         knot_indexes = np.linspace(0, x.shape[-1], self.knots, dtype=int)
         knot_values = np.random.normal(1, self.std, self.knots)
@@ -120,11 +124,26 @@ class RandomCropResize(tch.nn.Module):
 
 # Time Warping
 class TimeWarping(nn.Module):
-    def __init__(self, p):
-        print(p)
+    def __init__(self, mean=1.0, sigma=0.2, knots=4):
+        super(TimeWarping, self).__init__()
+        self.mean = mean
+        self.sigma = sigma
+        self.knots=knots
+        
 
     def forward(self ,x):
-        return x
+        orig_steps = np.arange(x.shape[1])
+
+        random_warps = np.random.normal(loc=self.mean, scale=self.sigma, size=(self.knots+2, x.shape[0]))
+        warp_steps = (np.ones((x.shape[0], 1)) * (np.linspace(0, x.shape[1]-1., num=self.knots+2))).T
+
+        ret = np.zeros_like(x)
+
+        for lead in range(x.shape[0]):
+            time_warp = CubicSpline(warp_steps[:,lead], warp_steps[:,lead] * random_warps[:,lead])(orig_steps)
+            scale = (x.shape[1]-1)/time_warp[-1]
+            ret[lead,:] = np.interp(orig_steps, np.clip(scale*time_warp, 0, x.shape[1]-1,), x[lead,:]).T
+        return tch.tensor(ret)
 
 # Window Warping
 class WindowWarping(nn.Module):
