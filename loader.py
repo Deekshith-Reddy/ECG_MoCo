@@ -189,6 +189,6 @@ class TwoCropsTransform:
         self.base_transform = base_transform
 
     def __call__(self, x):
-        q = self.base_transform(x)
-        k = self.base_transform(x)
+        q = self.base_transform(x).float()
+        k = self.base_transform(x).float()
         return [q.unsqueeze(0), k.unsqueeze(0)]

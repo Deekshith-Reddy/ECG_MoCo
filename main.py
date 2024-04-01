@@ -1,32 +1,22 @@
 import os
 import random
 import warnings
-import builtins
-import math
-import shutil
-import time
-import datetime
+
 
 import numpy as np
 import torch as tch
 import torch.nn as nn
-import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 import torch.backends.cudnn as cudnn
 import torch.multiprocessing as mp
-import torch.distributed as dist
 import pickle
-import wandb
 
 
 import DataTools
-import loader
-import parameters
-import Networks
-import moco_builder
 import main_moco
 import main_lincls
 import sex_classifcation
+import loader
 
 os.environ["WANDB_API_KEY"] = "e56acefffc20a7f826010f436f392b067f4e0ae5"
 device = tch.device("cuda" if tch.cuda.is_available() else "cpu")
@@ -52,7 +42,7 @@ args = dict(
 
     pretrain = True,
     start_epoch = 0,
-    pretrain_epochs = 90,
+    pretrain_epochs = 5,
     lr=0.03,
     momentum = 0.9,
     weight_decay = 1e-4,
@@ -70,10 +60,21 @@ args = dict(
     freeze_features = False,
     baseline = False,
         
-    batch_size = 64,
+    batch_size = 32,
     mlp = False,
     logtowandb = True,
     cos = True,
+
+    grid_search = dict(
+        aug = loader.MagnitudeWarping,
+        params=dict(
+            sigma = [0.02, 0.2, 2.0],
+            knots = [2, 4, 8, 16]
+        )
+    ),
+
+    checkpoint_dir = '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints'
+
 
 
 )
@@ -129,7 +130,13 @@ def main():
     if args["seed"] is not None:
         random.seed(args["seed"])
         tch.manual_seed(args["seed"])
+        np.random.seed(args["seed"])
+
+        tch.cuda.manual_seed(args["seed"])
+        tch.cuda.manual_seed_all(args["seed"])
+
         cudnn.deterministic = True
+        cudnn.benchmark = False
         warnings.warn(
             'You have chosen to seed training'
         )

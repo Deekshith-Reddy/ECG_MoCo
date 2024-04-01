@@ -26,7 +26,7 @@ import Networks
 import moco_builder
 
 
-def dataprep(args):
+def dataprep(args, aug, std, knots):
     
     dataDir = '/usr/sci/cibc/Maprodxn/ClinicalECGData/LVEFCohort/pythonData/'
     normEcgs = False
@@ -35,7 +35,7 @@ def dataprep(args):
         pre_train_patients = pickle.load(file)
 
     augmentation = [
-        loader.RandomCropResize(),
+        aug(sigma=std, knots=knots),
 
     ]
     augs = loader.TwoCropsTransform(transforms.Compose(augmentation))
@@ -61,6 +61,21 @@ def dataprep(args):
 
     return pre_train_sampler, pre_train_loader
 
+def create_model(args):
+    print("Creating Model")
+    encoder = Networks.ECG_SpatioTemporalNet
+    model = moco_builder.MoCo(
+        encoder,
+        args["moco_dim"],
+        args["moco_k"],
+        args["moco_m"],
+        args["moco_t"],
+        args["mlp"],        
+    )
+    print(model)
+    return model
+
+
 
 def main_worker(gpu, ngpus_per_node, args):
     args["gpu"] = gpu
@@ -80,122 +95,137 @@ def main_worker(gpu, ngpus_per_node, args):
         rank = args["rank"]
     )
 
-    #Create Model
-    print("Creating Model")
-    encoder = Networks.ECG_SpatioTemporalNet
-    model = moco_builder.MoCo(
-        encoder,
-        args["moco_dim"],
-        args["moco_k"],
-        args["moco_m"],
-        args["moco_t"],
-        args["mlp"],        
-    )
-    print(model)
+    sigma = args["grid_search"]["params"]["sigma"]
+    knots = args["grid_search"]["params"]["knots"]
+
+    augmentation = args["grid_search"]["aug"]
+    augmentation_name = augmentation.__qualname__
+
+    for sig in sigma:
+        for knot in knots:
+            #Create Model
+            model = create_model(args)
+
+            print(f"Started Pretaining for {augmentation_name} with std={sig} and knots={knot}")
 
 
-    # Data Loading
-    pre_train_sampler, pre_train_loader = dataprep(args)
-    
-    # WandB
-    date = datetime.datetime.now().date()
 
-    project = f"MLECG_MoCO_LVEF_PRETRAIN"
-    notes = "Pretrain"
-    config = dict(
-        batch_size = args["batch_size"],
-        ngpus = ngpus_per_node,
-        learning_rate = args["lr"],
-        epochs = args["pretrain_epochs"],
-        moco_dim = args["moco_dim"],
-        moco_k = args["moco_k"],
-        pre_train_size = len(pre_train_loader.dataset),
+            # Data Loading
+            pre_train_sampler, pre_train_loader = dataprep(args, augmentation, std=sig, knots=knot)
+            
+            # WandB
+            date = datetime.datetime.now().date()
 
-        
-    )
-    networkLabel = "pre_train_ECG_SpatialTemporalNet"
-    if not args["multiprocessing_distributed"] or (
-            args["multiprocessing_distributed"] and args["rank"] % ngpus_per_node == 0 and args["logtowandb"]
-        ):
-        if args["logtowandb"]:
-            wandbrun = wandb.init(
-                project = project,
-                notes=notes,
-                tags=["training", "no artifact"],
-                config=config,
-                entity='deekshith',
-                reinit=True,
-                name=f"{networkLabel}_{datetime.datetime.now()}",
-        )
+            project = f"MLECG_MoCO_LVEF_PRETRAIN_{augmentation_name}"
+            notes = f"Pretrain using {augmentation_name} and std:{sig}, knot:{knot}"
+            config = dict(
+                batch_size = args["batch_size"],
+                ngpus = ngpus_per_node,
+                learning_rate = args["lr"],
+                epochs = args["pretrain_epochs"],
+                moco_dim = args["moco_dim"],
+                moco_k = args["moco_k"],
+                pre_train_size = len(pre_train_loader.dataset),
+                std = sig,
+                knots = knot
 
-
-    if args["distributed"]:
-        if args["gpu"] is not None:
-            tch.cuda.set_device(args["gpu"])
-            model.cuda(args["gpu"])
-
-            args["batch_size"] = int(args["batch_size"] / ngpus_per_node)
-            args["workers"] = int((args["workers"] + ngpus_per_node - 1) / ngpus_per_node)
-
-            model = tch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[args["gpu"]]
+                
             )
-        else:
-            model.cuda()
-            model = tch.nn.parallel.DistributedDataParallel(model)
-    elif args["gpu"] is not None:
-        tch.cuda.set_device(args["gpu"])
-        model = model.cuda(args["gpu"])
-        raise NotImplementedError("Only DistributedDataParallel is supported.")
-    else:
-        raise NotImplementedError("Only DistributedDataParallel is supported.")
-
-    
-    criterion = nn.CrossEntropyLoss().cuda(args["gpu"])
-
-    optimizer = tch.optim.SGD(
-        model.parameters(),
-        args["lr"],
-        momentum=args["momentum"],
-        weight_decay=args["weight_decay"]
-    )
-
-    cudnn.benchmark = True
-
-    
-    
-    for epoch in range(args["pretrain_epochs"]):
-        if args["distributed"]:
-            pre_train_sampler.set_epoch(epoch)
-        lr = adjust_learning_rate(optimizer, epoch, args)
-
-        losses, top1, top5 = train(pre_train_loader, model, criterion, optimizer, epoch, args)
-
-        if not args["multiprocessing_distributed"] or (
-            args["multiprocessing_distributed"] and args["rank"] % ngpus_per_node == 0
-        ):
-            if (epoch + 1)% args["checkpoint_freq"] == 0:
-                save_checkpoint(
-                    {
-                        "epoch": epoch + 1,
-                        "arch": "Spatio Temporal Net",
-                        "state_dict": model.state_dict(),
-                        "optimizer": optimizer.state_dict(),
-                    },
-                    is_best=False,
-                    filename="checkpoints/checkpoint_{:04d}.pth.tar".format(epoch+1),
+            networkLabel = "pre_train_ECGNet"
+            if not args["multiprocessing_distributed"] or (
+                    args["multiprocessing_distributed"] and args["rank"] % ngpus_per_node == 0 and args["logtowandb"]
+                ):
+                if args["logtowandb"]:
+                    wandbrun = wandb.init(
+                        project = project,
+                        notes=notes,
+                        tags=["training", "no artifact"],
+                        config=config,
+                        entity='deekshith',
+                        reinit=True,
+                        name=f"{networkLabel}_{augmentation_name}_std:{sig}_knots:{knot}_{datetime.datetime.now()}",
                 )
-            wandb.log({
-                'Epoch': epoch,
-                'loss': losses.avg,
-                'acc@1': top1.avg,
-                'acc@5': top5.avg,
-                'lr':lr,
-            })
-    if not args["multiprocessing_distributed"] or (
-            args["multiprocessing_distributed"] and args["rank"] % ngpus_per_node == 0 and args["logtowandb"]
-        ):
-        wandbrun.finish()
+
+
+            if args["distributed"]:
+                if args["gpu"] is not None:
+                    tch.cuda.set_device(args["gpu"])
+                    model.cuda(args["gpu"])
+
+                    args["batch_size"] = int(args["batch_size"] / ngpus_per_node)
+                    args["workers"] = int((args["workers"] + ngpus_per_node - 1) / ngpus_per_node)
+
+                    model = tch.nn.parallel.DistributedDataParallel(
+                        model, device_ids=[args["gpu"]]
+                    )
+                else:
+                    model.cuda()
+                    model = tch.nn.parallel.DistributedDataParallel(model)
+            elif args["gpu"] is not None:
+                tch.cuda.set_device(args["gpu"])
+                model = model.cuda(args["gpu"])
+                raise NotImplementedError("Only DistributedDataParallel is supported.")
+            else:
+                raise NotImplementedError("Only DistributedDataParallel is supported.")
+
+            
+            criterion = nn.CrossEntropyLoss().cuda(args["gpu"])
+
+            optimizer = tch.optim.SGD(
+                model.parameters(),
+                args["lr"],
+                momentum=args["momentum"],
+                weight_decay=args["weight_decay"]
+            )
+
+            cudnn.benchmark = True
+
+            
+            best_top1 = 0.
+            for epoch in range(args["pretrain_epochs"]):
+                if args["distributed"]:
+                    pre_train_sampler.set_epoch(epoch)
+                lr = adjust_learning_rate(optimizer, epoch, args)
+
+                losses, top1, top5 = train(pre_train_loader, model, criterion, optimizer, epoch, args)
+
+                if not args["multiprocessing_distributed"] or (
+                    args["multiprocessing_distributed"] and args["rank"] % ngpus_per_node == 0
+                ):
+                    if (epoch + 1)% args["checkpoint_freq"] == 0:
+                        save_checkpoint(
+                            {
+                                "epoch": epoch + 1,
+                                "arch": "Spatio Temporal Net",
+                                "top1": top1,
+                                "state_dict": model.state_dict(),
+                                "optimizer": optimizer.state_dict(),
+                            },
+                            is_best=False,
+                            filename=f"{args['checkpoint_dir']}/checkpoint_{augmentation_name}/std_{sig}_knots_{knot}/checkpoint_{epoch+1:04d}.pth.tar",
+                        )
+                    if top1 > best_top1:
+                        best_top1 = top1
+                        state = {
+                                "epoch": epoch + 1,
+                                "arch": "Spatio Temporal Net",
+                                "top1": top1,
+                                "state_dict": model.state_dict(),
+                                "optimizer": optimizer.state_dict(),
+                            }
+                        filename = f"{args['checkpoint_dir']}/checkpoint_{augmentation_name}/std_{sig}_knots_{knot}/checkpoint_best.pth.tar"
+                        tch.save(state, filename)
+                    wandb.log({
+                        'Epoch': epoch,
+                        'loss': losses.avg,
+                        'acc@1': top1.avg,
+                        'acc@5': top5.avg,
+                        'lr':lr,
+                    })
+            if not args["multiprocessing_distributed"] or (
+                    args["multiprocessing_distributed"] and args["rank"] % ngpus_per_node == 0 and args["logtowandb"]
+                ):
+                wandbrun.finish()
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
     batch_time = AverageMeter("Time", ":6.3f")
