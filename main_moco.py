@@ -152,7 +152,7 @@ def main_worker(gpu, ngpus_per_node, args):
                     tch.cuda.set_device(args["gpu"])
                     model.cuda(args["gpu"])
 
-                    args["batch_size"] = int(args["batch_size"] / ngpus_per_node)
+                    args["batch_size"] = int(args["batch_size"] / 1)
                     args["workers"] = int((args["workers"] + ngpus_per_node - 1) / ngpus_per_node)
 
                     model = tch.nn.parallel.DistributedDataParallel(
@@ -178,10 +178,17 @@ def main_worker(gpu, ngpus_per_node, args):
                 weight_decay=args["weight_decay"]
             )
 
+            # optimizer = tch.optim.Adam(
+            #     model.parameters(),
+            #     args["lr"],
+            # )
+
             cudnn.benchmark = True
 
             
             best_top1 = 0.
+            prev_top1 = 100.
+            dec_epochs = 0
             for epoch in range(args["pretrain_epochs"]):
                 if args["distributed"]:
                     pre_train_sampler.set_epoch(epoch)
@@ -197,24 +204,28 @@ def main_worker(gpu, ngpus_per_node, args):
                             {
                                 "epoch": epoch + 1,
                                 "arch": "Spatio Temporal Net",
-                                "top1": top1,
+                                "top1": top1.avg,
                                 "state_dict": model.state_dict(),
                                 "optimizer": optimizer.state_dict(),
                             },
                             is_best=False,
                             filename=f"{args['checkpoint_dir']}/checkpoint_{augmentation_name}/std_{sig}_knots_{knot}/checkpoint_{epoch+1:04d}.pth.tar",
                         )
-                    if top1 > best_top1:
-                        best_top1 = top1
+                    if top1.avg > best_top1:
+                        best_top1 = top1.avg
                         state = {
                                 "epoch": epoch + 1,
                                 "arch": "Spatio Temporal Net",
-                                "top1": top1,
+                                "top1": top1.avg,
                                 "state_dict": model.state_dict(),
                                 "optimizer": optimizer.state_dict(),
                             }
                         filename = f"{args['checkpoint_dir']}/checkpoint_{augmentation_name}/std_{sig}_knots_{knot}/checkpoint_best.pth.tar"
+                        os.makedirs(os.path.dirname(filename), exist_ok=True)
+                        print(f"Saving the best top1 average model @ Epoch:{epoch} with {top1.avg} @{filename}")
+
                         tch.save(state, filename)
+                        print(f"Successfully Saved the Model")
                     wandb.log({
                         'Epoch': epoch,
                         'loss': losses.avg,
@@ -222,6 +233,19 @@ def main_worker(gpu, ngpus_per_node, args):
                         'acc@5': top5.avg,
                         'lr':lr,
                     })
+                    print("Logged to Wandb")
+                print(f"Best Top1:{best_top1} before {dec_epochs} Epochs")
+                if top1.avg >= best_top1:
+                    best_top1 = top1.avg
+                    dec_epochs = 0    
+                else:
+                    dec_epochs+=1
+                    if epoch >= 35 and dec_epochs >= args["early_stop"]:
+                        print(f"Breaking the current loop since continues decrease for 10 cycles is found")
+                        break
+                    
+                    
+                
             if not args["multiprocessing_distributed"] or (
                     args["multiprocessing_distributed"] and args["rank"] % ngpus_per_node == 0 and args["logtowandb"]
                 ):

@@ -42,13 +42,14 @@ args = dict(
 
     pretrain = True,
     start_epoch = 0,
-    pretrain_epochs = 5,
-    lr=0.03,
+    pretrain_epochs = 90,
+    lr=0.1,
     momentum = 0.9,
     weight_decay = 1e-4,
-    checkpoint_freq = 15,
+    checkpoint_freq = 10,
     schedule = [30, 60],
     print_freq = 20,
+    early_stop = 10,
 
     sex_classification = False,
     
@@ -57,22 +58,22 @@ args = dict(
     finetuning_ratios = [0.005, 0.01, 0.05, 0.10, 0.5, 1.0],
     lossParams = dict(learningRate = 3*1e-6, threshold=40., type='binary cross entropy'),
     pretrained = 'checkpoints/checkpoint_sex.pth.tar',
+    slow_encoder = False,
     freeze_features = False,
     baseline = False,
         
-    batch_size = 32,
+    batch_size = 128,
     mlp = False,
     logtowandb = True,
     cos = True,
 
     grid_search = dict(
-        aug = loader.MagnitudeWarping,
+        aug = loader.GaussianNoise,
         params=dict(
-            sigma = [0.02, 0.2, 2.0],
-            knots = [2, 4, 8, 16]
+            mean = [0, 1, 10, 20],
+            sigma = [ 0.5, 2, 5, 10]
         )
     ),
-
     checkpoint_dir = '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints'
 
 

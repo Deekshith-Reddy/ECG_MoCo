@@ -145,6 +145,27 @@ class TimeWarping(nn.Module):
             ret[lead,:] = np.interp(orig_steps, np.clip(scale*time_warp, 0, x.shape[1]-1,), x[lead,:]).T
         return tch.tensor(ret)
 
+class BaselineWarping(nn.Module):
+    def __init__(self, knots=10, mean=1, sigma=0.2):
+        super(BaselineWarping, self).__init__()
+        self.knots = knots
+        self.mean = mean
+        self.sigma = sigma
+    
+    def forward(self, x):
+        # self.std = random.uniform(self.sigma[0], self.sigma[1])
+        from scipy.interpolate import CubicSpline
+
+        self.std = self.sigma
+
+        knot_indexes = np.linspace(0, x.shape[-1], self.knots, dtype=int)
+        knot_values = np.random.normal(1, self.std, self.knots)
+
+        spline = CubicSpline(knot_indexes, knot_values)
+        self.warping = tch.tensor(spline(np.arange(x.shape[-1])))
+
+        return x + self.warping
+
 # Window Warping
 class WindowWarping(nn.Module):
     def __init__(self):

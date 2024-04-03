@@ -89,7 +89,7 @@ def create_model(args):
         if os.path.isfile(args["pretrained"]):
             print("=> loading checkpoint '{}'".format(args["pretrained"]))
             checkpoint = tch.load(args["pretrained"], map_location="cpu")
-
+            print(f"Loaded checkpoint @Epoch {checkpoint['epoch']}")
             state_dict = checkpoint["state_dict"]
             if args["pretrained"].find("sex") == -1:
                 for k in list(state_dict.keys()):
@@ -129,9 +129,6 @@ def create_model(args):
 
 
 def main_worker(args):
-
-     
-    
     # Data Loading
     train_loaders, val_loader = dataprep(args)
 
@@ -161,8 +158,14 @@ def main_worker(args):
             momentum=args["momentum"],
             weight_decay=args["weight_decay"]
         )
-        
-        optimizer1 = tch.optim.Adam(model.parameters(), lr=lossParams['learningRate'])
+
+        params = [{'params':getattr(model,i).parameters(), 'lr': 1e-5} if i.find("finalLayer")==-1 else {'params':getattr(model,i).parameters(), 'lr': 1e-3} for i,x in model.named_children()]
+
+        if args["slow_encoder"]:
+            optimizer1 = tch.optim.Adam(params)
+            print("Using the slow encoder with learning rates of the encoder being 1e-5 and the finalLayer being 1e-3")
+        else:
+            optimizer1 = tch.optim.Adam(model.parameters(), lr=lossParams['learningRate'])
 
         freeze = "_freeze" if args["freeze_features"] else ""
         baseline = "_baseline" if args["baseline"]  else ""
