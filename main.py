@@ -43,13 +43,13 @@ args = dict(
     pretrain = True,
     start_epoch = 0,
     pretrain_epochs = 90,
-    lr=0.1,
+    lr=0.03,
     momentum = 0.9,
     weight_decay = 1e-4,
     checkpoint_freq = 10,
     schedule = [30, 60],
     print_freq = 20,
-    early_stop = 10,
+    early_stop = 15,
 
     sex_classification = False,
     
