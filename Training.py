@@ -46,7 +46,7 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
 
     for ep in range(numEpoch):
         print(f'Epoch {ep+1} of {numEpoch}')
-        lr = adjust_learning_rate(optimizer=optimizer, epoch=ep, numEpochs=numEpoch, args=args)
+        # lr = adjust_learning_rate(optimizer=optimizer, epoch=ep, numEpochs=numEpoch, args=args)
         running_loss = 0.0
         network.train()
         count = 0
@@ -137,7 +137,6 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
                     'auc test': auc_test,
                     'auc train': auc_train,
                     'Best AUC Test': best_auc_test,
-                    'learning_rate': lr,
                     'ROCs individual': plt
                 })
         elif problemType == 'Regression':
@@ -165,15 +164,15 @@ def trainNetwork(network, trainDataLoader, testDataLoader, numEpoch, optimizer, 
             final_model = copy.deepcopy(network.state_dict())
             tch.save(final_model, modelSaveDir+label+'_final.pt')
 
-def adjust_learning_rate(optimizer, epoch, numEpochs, args):
-    """Decay the learning rate based on schedule"""
-    lr = args["lossParams"]["learningRate"]
-    if args["cos"]:  # cosine lr schedule
-        lr *= 0.5 * (1.0 + math.cos(math.pi * epoch / numEpochs))
-    else:  # stepwise lr schedule
-        for milestone in args["schedule"]:
-            lr *= 0.1 if epoch >= milestone else 1.0
-    print(f"Learning Rate = {lr}")
-    for param_group in optimizer.param_groups:
-        param_group["lr"] = lr
-    return lr
+# def adjust_learning_rate(optimizer, epoch, numEpochs, args):
+#     """Decay the learning rate based on schedule"""
+#     lr = args["lossParams"]["learningRate"]
+#     if args["cos"]:  # cosine lr schedule
+#         lr *= 0.5 * (1.0 + math.cos(math.pi * epoch / numEpochs))
+#     else:  # stepwise lr schedule
+#         for milestone in args["schedule"]:
+#             lr *= 0.1 if epoch >= milestone else 1.0
+#     print(f"Learning Rate = {lr}")
+#     for param_group in optimizer.param_groups:
+#         param_group["lr"] = lr
+#     return lr

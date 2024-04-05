@@ -1,6 +1,7 @@
 import os
 import random
 import datetime
+import sys
 
 import torch as tch
 import torch.nn.parallel
@@ -46,7 +47,7 @@ def dataprep(args):
 
         finetuning_patients = pretrain_patients[finetuning_patient_indices].squeeze()
 
-        dataset = DataTools.ECGDatasetLoader(baseDir=dataDir, patients=finetuning_patients.tolist(), normalize=normEcgs)
+        dataset = DataTools.PatientECGDatasetLoader(baseDir=dataDir, patients=finetuning_patients.tolist(), normalize=normEcgs)
 
         loader = torch.utils.data.DataLoader(
         dataset,
@@ -60,7 +61,7 @@ def dataprep(args):
         dataset_lengths.append(len(dataset))
     
     validation_patients = validation_patients
-    validation_dataset = DataTools.ECGDatasetLoader(baseDir=dataDir, patients=validation_patients.tolist(), normalize=normEcgs)
+    validation_dataset = DataTools.PatientECGDatasetLoader(baseDir=dataDir, patients=validation_patients.tolist(), normalize=normEcgs)
     val_loader = torch.utils.data.DataLoader(
         validation_dataset,
         batch_size=args["batch_size"],
@@ -124,6 +125,7 @@ def create_model(args):
             print("=> loaded pre-trained model '{}'".format(args["pretrained"]))
         else:
             print("=> No checkpoint found at '{}'".format(args["pretrained"]))
+            sys.exit()
 
     return model
 
@@ -143,29 +145,6 @@ def main_worker(args):
     for i, train_loader in enumerate(train_loaders):
         print(f"Starting Finetuning with {len(train_loader.dataset)} patients")
 
-        model = create_model(args)   
-    
-        model = tch.nn.DataParallel(model, device_ids=gpuIds)   
-        print(model)
-        model.to(device)
-
-        lossParams = args["lossParams"]
-
-
-        optimizer = tch.optim.SGD(
-            model.parameters(),
-            args["lr"],
-            momentum=args["momentum"],
-            weight_decay=args["weight_decay"]
-        )
-
-        params = [{'params':getattr(model,i).parameters(), 'lr': 1e-5} if i.find("finalLayer")==-1 else {'params':getattr(model,i).parameters(), 'lr': 1e-3} for i,x in model.named_children()]
-
-        if args["slow_encoder"]:
-            optimizer1 = tch.optim.Adam(params)
-            print("Using the slow encoder with learning rates of the encoder being 1e-5 and the finalLayer being 1e-3")
-        else:
-            optimizer1 = tch.optim.Adam(model.parameters(), lr=lossParams['learningRate'])
 
         freeze = "_freeze" if args["freeze_features"] else ""
         baseline = "_baseline" if args["baseline"]  else ""
@@ -173,7 +152,7 @@ def main_worker(args):
         on_sex = "" if args["pretrained"].find("sex") == -1 and not args["baseline"] else "_ON_SEX"
     
 
-        project = f"MLECG_{MoCo}_LVEF_CLASSIFICATION{freeze}{baseline}{on_sex}_{date}"
+        project = f"MLECG_{MoCo}_LVEF_CLASSIFICATION{freeze}{baseline}{on_sex}_GaussianNoise_v1"
         notes = f"Classification"
         config = dict(
             batch_size = args["batch_size"],
@@ -201,6 +180,34 @@ def main_worker(args):
                 name=f"{networkLabel}_{len(train_loader.dataset)}_{datetime.datetime.now()}",
             )
 
+
+        model = create_model(args)   
+    
+        model = tch.nn.DataParallel(model, device_ids=gpuIds)   
+        print(model)
+        model.to(device)
+
+        lossParams = args["lossParams"]
+
+
+        optimizer = tch.optim.SGD(
+            model.parameters(),
+            args["lr"],
+            momentum=args["momentum"],
+            weight_decay=args["weight_decay"]
+        )
+        slow = 1e-4
+        fast = 1e-2
+
+        params = [{'params':getattr(model,i).parameters(), 'lr': slow} if i.find("finalLayer")==-1 else {'params':getattr(model,i).parameters(), 'lr': fast} for i,x in model.named_children()]
+
+        if args["slow_encoder"]:
+            optimizer1 = tch.optim.Adam(params)
+            print(f"Using the slow encoder with learning rates of the encoder being {slow} and the finalLayer being {fast}")
+        else:
+            optimizer1 = tch.optim.Adam(model.parameters(), lr=lossParams['learningRate'])
+
+        
         T.trainNetwork(
                         network=model,
                         trainDataLoader=train_loader,

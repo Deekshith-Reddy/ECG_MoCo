@@ -42,7 +42,7 @@ args = dict(
 
     pretrain = True,
     start_epoch = 0,
-    pretrain_epochs = 90,
+    pretrain_epochs = 70,
     lr=0.03,
     momentum = 0.9,
     weight_decay = 1e-4,
@@ -62,16 +62,16 @@ args = dict(
     freeze_features = False,
     baseline = False,
         
-    batch_size = 128,
+    batch_size = 32,
     mlp = False,
     logtowandb = True,
     cos = True,
 
     grid_search = dict(
-        aug = loader.GaussianNoise,
+        aug = loader.TimeWarping,
         params=dict(
-            mean = [0, 1, 10, 20],
-            sigma = [ 0.5, 2, 5, 10]
+            knots = [2, 4, 8, 16],
+            sigma = [ 0.02]
         )
     ),
     checkpoint_dir = '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints'

@@ -26,7 +26,7 @@ import Networks
 import moco_builder
 
 
-def dataprep(args, aug, std, mean):
+def dataprep(args, aug, std, knots):
     
     dataDir = '/usr/sci/cibc/Maprodxn/ClinicalECGData/LVEFCohort/pythonData/'
     normEcgs = False
@@ -35,7 +35,7 @@ def dataprep(args, aug, std, mean):
         pre_train_patients = pickle.load(file)
 
     augmentation = [
-        aug(sigma=std, mean=mean),
+        aug(sigma=std, knots=knots),
 
     ]
     augs = loader.TwoCropsTransform(transforms.Compose(augmentation))
@@ -96,28 +96,28 @@ def main_worker(gpu, ngpus_per_node, args):
     )
 
     sigma = args["grid_search"]["params"]["sigma"]
-    means = args["grid_search"]["params"]["mean"]
+    knots = args["grid_search"]["params"]["knots"]
 
     augmentation = args["grid_search"]["aug"]
     augmentation_name = augmentation.__qualname__
 
     for sig in sigma:
-        for mean in means:
+        for knot in knots:
             #Create Model
             model = create_model(args)
 
-            print(f"Started Pretaining for {augmentation_name} with std={sig} and mean={mean}")
+            print(f"Started Pretaining for {augmentation_name} with std={sig} and knot={knot}")
 
 
 
             # Data Loading
-            pre_train_sampler, pre_train_loader = dataprep(args, augmentation, std=sig, mean=mean)
+            pre_train_sampler, pre_train_loader = dataprep(args, augmentation, std=sig, knots=knot)
             
             # WandB
             date = datetime.datetime.now().date()
 
             project = f"MLECG_MoCO_LVEF_PRETRAIN_{augmentation_name}"
-            notes = f"Pretrain using {augmentation_name} and std:{sig}, mean:{mean}"
+            notes = f"Pretrain using {augmentation_name} and std:{sig}, knots:{knot}"
             config = dict(
                 batch_size = args["batch_size"],
                 ngpus = ngpus_per_node,
@@ -127,7 +127,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 moco_k = args["moco_k"],
                 pre_train_size = len(pre_train_loader.dataset),
                 std = sig,
-                mean = mean
+                knots = knot
 
                 
             )
@@ -143,7 +143,7 @@ def main_worker(gpu, ngpus_per_node, args):
                         config=config,
                         entity='deekshith',
                         reinit=True,
-                        name=f"{networkLabel}_{augmentation_name}_std:{sig}_mean:{mean}_{datetime.datetime.now()}",
+                        name=f"{networkLabel}_{augmentation_name}_std:{sig}_knots:{knot}_{datetime.datetime.now()}",
                 )
 
 
@@ -209,7 +209,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                 "optimizer": optimizer.state_dict(),
                             },
                             is_best=False,
-                            filename=f"{args['checkpoint_dir']}/checkpoint_{augmentation_name}/std_{sig}_mean_{mean}/checkpoint_{epoch+1:04d}.pth.tar",
+                            filename=f"{args['checkpoint_dir']}/checkpoint_{augmentation_name}/std_{sig}_knot_{knot}/checkpoint_{epoch+1:04d}.pth.tar",
                         )
                     if top1.avg > best_top1:
                         best_top1 = top1.avg
@@ -220,7 +220,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                 "state_dict": model.state_dict(),
                                 "optimizer": optimizer.state_dict(),
                             }
-                        filename = f"{args['checkpoint_dir']}/checkpoint_{augmentation_name}/std_{sig}_mean_{mean}/checkpoint_best.pth.tar"
+                        filename = f"{args['checkpoint_dir']}/checkpoint_{augmentation_name}/std_{sig}_knot_{knot}/checkpoint_best.pth.tar"
                         os.makedirs(os.path.dirname(filename), exist_ok=True)
                         print(f"Saving the best top1 average model @ Epoch:{epoch} with {top1.avg} @{filename}")
 
