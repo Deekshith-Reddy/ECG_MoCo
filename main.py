@@ -68,10 +68,22 @@ args = dict(
     cos = True,
 
     grid_search = dict(
-        aug = loader.TimeWarping,
+        # aug = loader.BaselineWarping,
+        # params=dict(
+        #     sigma = [30],
+        #     knots = [20]
+        # ),
+
+        # aug = loader.WindowWarping,
+        # params=dict(
+        #     window_ratio = [0.05, 0.1, 0.33, 0.5],
+        #     scales = [[0.5, 2]]
+        # ),
+
+         aug = loader.RandomCropResize,
         params=dict(
-            knots = [2, 4, 8, 16],
-            sigma = [ 0.02]
+            window_ratio = [.3],
+            scales = [.3]
         )
     ),
     checkpoint_dir = '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints'
@@ -153,7 +165,7 @@ def main():
 
     args["distributed"] = args["world_size"] > 1 or args["multiprocessing_distributed"]
 
-    splitPatients(args)
+    # splitPatients(args)
 
     ngpus_per_node = tch.cuda.device_count()
     

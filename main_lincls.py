@@ -47,7 +47,7 @@ def dataprep(args):
 
         finetuning_patients = pretrain_patients[finetuning_patient_indices].squeeze()
 
-        dataset = DataTools.PatientECGDatasetLoader(baseDir=dataDir, patients=finetuning_patients.tolist(), normalize=normEcgs)
+        dataset = DataTools.PatientECGDatasetLoader_v2(baseDir=dataDir, patients=finetuning_patients.tolist(), normalize=normEcgs)
 
         loader = torch.utils.data.DataLoader(
         dataset,
@@ -61,7 +61,7 @@ def dataprep(args):
         dataset_lengths.append(len(dataset))
     
     validation_patients = validation_patients
-    validation_dataset = DataTools.PatientECGDatasetLoader(baseDir=dataDir, patients=validation_patients.tolist(), normalize=normEcgs)
+    validation_dataset = DataTools.PatientECGDatasetLoader_v2(baseDir=dataDir, patients=validation_patients.tolist(), normalize=normEcgs)
     val_loader = torch.utils.data.DataLoader(
         validation_dataset,
         batch_size=args["batch_size"],
@@ -82,6 +82,8 @@ def create_model(args):
         print("Preparing to Run Baseline without loading pre-trained weights")
         return model
     
+    if args["freeze_features"]:
+        print("Freezing all the layers except the final layer")
     for name, param in model.named_parameters():
         if not name.startswith("finalLayer."):
             param.requires_grad = not args["freeze_features"]
@@ -149,10 +151,10 @@ def main_worker(args):
         freeze = "_freeze" if args["freeze_features"] else ""
         baseline = "_baseline" if args["baseline"]  else ""
         MoCo = "_MoCo" if args["pretrained"].find("sex") == -1 else ""
-        on_sex = "" if args["pretrained"].find("sex") == -1 and not args["baseline"] else "_ON_SEX"
+        on_sex = "" if args["pretrained"].find("sex") == -1 or not args["baseline"] else "_ON_SEX"
     
 
-        project = f"MLECG_{MoCo}_LVEF_CLASSIFICATION{freeze}{baseline}{on_sex}_GaussianNoise_v1"
+        project = f"MLECG_{MoCo}_LVEF_CLASSIFICATION{freeze}{baseline}{on_sex}_RandomCropResize_v1"
         notes = f"Classification"
         config = dict(
             batch_size = args["batch_size"],

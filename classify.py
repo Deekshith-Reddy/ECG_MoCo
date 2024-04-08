@@ -48,7 +48,7 @@ args = dict(
     sex_classification = False,
     
     # finetuning_epochs = [40, 30, 30, 30, 30, 20],
-    finetuning_epochs = [80, 60, 50],
+    finetuning_epochs = [50, 40, 30],
     finetuning_ratios = [0.01, 0.05, 0.10],
     lossParams = dict(learningRate = 1e-4, threshold=40., type='binary cross entropy'),
     pretrained = '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints/checkpoint_MagnitudeWarping/std_2_knots_2/checkpoint_best.pth.tar',
@@ -56,33 +56,18 @@ args = dict(
     freeze_features = False,
     baseline = False,
         
-    batch_size = 256,
+    batch_size = 64,
     mlp = False,
     logtowandb = True,
     cos = False,
 
-    grid_search = dict(
-        aug = loader.GaussianNoise,
-        params=dict(
-            mean = [0, 1, 10, 20],
-            sigma = [ 0.5, 2, 5, 10]
-        )
-    ),
+    
     checkpoint_dir = '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints'
 
 )
 
 pretrained = [
-    '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints/checkpoint_GaussianNoise/std_0.5_mean_0/checkpoint_best.pth.tar',
-    '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints/checkpoint_GaussianNoise/std_0.5_mean_5/checkpoint_best.pth.tar',
-    '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints/checkpoint_GaussianNoise/std_0.5_mean_10/checkpoint_best.pth.tar',
-    '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints/checkpoint_GaussianNoise/std_2_mean_0/checkpoint_best.pth.tar',
-    '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints/checkpoint_GaussianNoise/std_2_mean_5/checkpoint_best.pth.tar',
-    '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints/checkpoint_GaussianNoise/std_2_mean_10/checkpoint_best.pth.tar',
-    '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints/checkpoint_GaussianNoise/std_10_mean_0/checkpoint_best.pth.tar',
-    '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints/checkpoint_GaussianNoise/std_10_mean_5/checkpoint_best.pth.tar',
-    '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints/checkpoint_GaussianNoise/std_10_mean_10/checkpoint_best.pth.tar',
-
+    '/usr/sci/cibc/ProjectsAndScratch/DeekshithMLECG/checkpoints/checkpoint_RandomCropResize/random_crop_resize/checkpoint_best.pth.tar',
 ]
 
 if __name__ == "__main__":

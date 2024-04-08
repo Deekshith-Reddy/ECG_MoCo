@@ -146,7 +146,7 @@ class TimeWarping(nn.Module):
         return tch.tensor(ret)
 
 class BaselineWarping(nn.Module):
-    def __init__(self, knots=10, mean=1, sigma=0.2):
+    def __init__(self, knots=10, mean=10, sigma=0.2):
         super(BaselineWarping, self).__init__()
         self.knots = knots
         self.mean = mean
@@ -167,12 +167,29 @@ class BaselineWarping(nn.Module):
         return x + self.warping
 
 # Window Warping
-class WindowWarping(nn.Module):
-    def __init__(self):
+class WindowWarping(tch.nn.Module):
+    def __init__(self, window_ratio=0.1, scales=[0.5, 2]):
         super(WindowWarping, self).__init__()
+        self.window_ratio = window_ratio
+        self.scales = scales
+
     
     def forward(self, x):
-        return x
+        warp_scale = np.random.choice(self.scales, 1)
+        warp_size = np.ceil(self.window_ratio*x.shape[-1]).astype(int)
+        window_steps = np.arange(warp_size)
+
+        self.window_starts = np.random.randint(low=1, high=x.shape[-1]-warp_size-1, size=1).astype(int)[0]
+        self.window_ends = (self.window_starts + warp_size).astype(int)
+
+        ret = np.zeros_like(x)
+        for lead in range(x.shape[0]):
+            start_seg = x[lead, :self.window_starts]
+            window_seg = np.interp(np.linspace(0, warp_size-1, num=int(warp_size*warp_scale)), window_steps, x[lead, self.window_starts:self.window_ends])
+            end_seg = x[lead,self.window_ends:]
+            warped = np.concatenate((start_seg, window_seg, end_seg))
+            ret[lead, :] = np.interp(np.arange(x.shape[-1]), np.linspace(0, x.shape[-1]-1., num=warped.size), warped).T
+        return tch.tensor(ret)
 
 
 
