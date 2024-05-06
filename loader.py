@@ -9,7 +9,7 @@ from scipy.interpolate import CubicSpline
 
 # Jittering
 class GaussianNoise(nn.Module):
-    def __init__(self, sigma=0.3, mean=0):
+    def __init__(self, sigma=10, mean=5):
         super(GaussianNoise, self).__init__()
         self.sigma = sigma
         self.mean = mean
@@ -49,7 +49,7 @@ class Scaling(nn.Module):
 
 # Magnitude Warping
 class MagnitudeWarping(nn.Module):
-    def __init__(self, knots=10, mean=1, sigma=0.2):
+    def __init__(self, knots=16, mean=1, sigma=0.02):
         super(MagnitudeWarping, self).__init__()
         self.knots = knots
         self.mean = mean
@@ -145,13 +145,51 @@ class TimeWarping(nn.Module):
             ret[lead,:] = np.interp(orig_steps, np.clip(scale*time_warp, 0, x.shape[1]-1,), x[lead,:]).T
         return tch.tensor(ret)
 
-# Window Warping
-class WindowWarping(nn.Module):
-    def __init__(self):
-        super(WindowWarping, self).__init__()
+class BaselineWarping(nn.Module):
+    def __init__(self, knots=10, mean=10, sigma=0.2):
+        super(BaselineWarping, self).__init__()
+        self.knots = knots
+        self.mean = mean
+        self.sigma = sigma
     
     def forward(self, x):
-        return x
+        # self.std = random.uniform(self.sigma[0], self.sigma[1])
+        from scipy.interpolate import CubicSpline
+
+        self.std = self.sigma
+
+        knot_indexes = np.linspace(0, x.shape[-1], self.knots, dtype=int)
+        knot_values = np.random.normal(1, self.std, self.knots)
+
+        spline = CubicSpline(knot_indexes, knot_values)
+        self.warping = tch.tensor(spline(np.arange(x.shape[-1])))
+
+        return x + self.warping
+
+# Window Warping
+class WindowWarping(tch.nn.Module):
+    def __init__(self, window_ratio=0.1, scales=[0.5, 2]):
+        super(WindowWarping, self).__init__()
+        self.window_ratio = window_ratio
+        self.scales = scales
+
+    
+    def forward(self, x):
+        warp_scale = np.random.choice(self.scales, 1)
+        warp_size = np.ceil(self.window_ratio*x.shape[-1]).astype(int)
+        window_steps = np.arange(warp_size)
+
+        self.window_starts = np.random.randint(low=1, high=x.shape[-1]-warp_size-1, size=1).astype(int)[0]
+        self.window_ends = (self.window_starts + warp_size).astype(int)
+
+        ret = np.zeros_like(x)
+        for lead in range(x.shape[0]):
+            start_seg = x[lead, :self.window_starts]
+            window_seg = np.interp(np.linspace(0, warp_size-1, num=int(warp_size*warp_scale)), window_steps, x[lead, self.window_starts:self.window_ends])
+            end_seg = x[lead,self.window_ends:]
+            warped = np.concatenate((start_seg, window_seg, end_seg))
+            ret[lead, :] = np.interp(np.arange(x.shape[-1]), np.linspace(0, x.shape[-1]-1., num=warped.size), warped).T
+        return tch.tensor(ret)
 
 
 
@@ -178,10 +216,6 @@ class ZeroMask(nn.Module):
         return X_masked
 
 
-
-
-
-
 class TwoCropsTransform:
     """Take two random crops of one image as the query and key."""
 
@@ -189,6 +223,6 @@ class TwoCropsTransform:
         self.base_transform = base_transform
 
     def __call__(self, x):
-        q = self.base_transform(x)
-        k = self.base_transform(x)
+        q = self.base_transform(x).float()
+        k = self.base_transform(x).float()
         return [q.unsqueeze(0), k.unsqueeze(0)]

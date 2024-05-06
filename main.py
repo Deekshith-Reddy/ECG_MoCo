@@ -1,32 +1,18 @@
 import os
 import random
 import warnings
-import builtins
-import math
-import shutil
-import time
-import datetime
+
 
 import numpy as np
 import torch as tch
-import torch.nn as nn
-import matplotlib.pyplot as plt
-import torchvision.transforms as transforms
 import torch.backends.cudnn as cudnn
 import torch.multiprocessing as mp
-import torch.distributed as dist
 import pickle
-import wandb
 
 
 import DataTools
-import loader
-import parameters
-import Networks
-import moco_builder
 import main_moco
-import main_lincls
-import sex_classifcation
+
 
 os.environ["WANDB_API_KEY"] = "e56acefffc20a7f826010f436f392b067f4e0ae5"
 device = tch.device("cuda" if tch.cuda.is_available() else "cpu")
@@ -70,7 +56,7 @@ args = dict(
     freeze_features = False,
     baseline = False,
         
-    batch_size = 64,
+    batch_size = 32,
     mlp = False,
     logtowandb = True,
     cos = True,
@@ -145,22 +131,22 @@ def main():
 
     args["distributed"] = args["world_size"] > 1 or args["multiprocessing_distributed"]
 
-    splitPatients(args)
+    # splitPatients(args)
 
     ngpus_per_node = tch.cuda.device_count()
     
     
-    if args["pretrain"]:
-        if args["multiprocessing_distributed"]:
-            args["world_size"] = ngpus_per_node * args["world_size"]
-            mp.spawn(main_moco.main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
-        else:
-            # Simply call main_worker function
-            main_moco.main_worker(args.gpu, ngpus_per_node, args)
-    elif args["sex_classification"]:
-        sex_classifcation.main_worker(sex_args)
+    
+    if args["multiprocessing_distributed"]:
+        args["world_size"] = ngpus_per_node * args["world_size"]
+        mp.spawn(main_moco.main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
     else:
-        main_lincls.main_worker(args)
+        # Simply call main_worker function
+        main_moco.main_worker(args.gpu, ngpus_per_node, args)
+    # elif args["sex_classification"]:
+    #     sex_classifcation.main_worker(sex_args)
+    # else:
+    #     main_lincls.main_worker(args)
 
     print("DUNDANADUN")
 

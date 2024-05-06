@@ -35,12 +35,14 @@ def dataprep(args):
         pre_train_patients = pickle.load(file)
 
     augmentation = [
-        loader.RandomCropResize(),
-
+        loader.GaussianNoise(sigma=0.5, mean=10),
+        loader.MagnitudeWarping(),
     ]
+
     augs = loader.TwoCropsTransform(transforms.Compose(augmentation))
 
-
+    augmentation_name = '_'.join([str(aug.__class__.__name__) for aug in augmentation])
+    print(f"Augmentation: {augmentation_name}")
     pre_train_dataset = DataTools.PreTrainECGDatasetLoader(baseDir=dataDir,augs=augs,patients=pre_train_patients.tolist(), normalize=normEcgs)
 
     if args["distributed"]:
@@ -59,7 +61,7 @@ def dataprep(args):
     )
     print(f"Pre Training using {len(pre_train_loader.dataset)} ECGs")
 
-    return pre_train_sampler, pre_train_loader
+    return augmentation_name, pre_train_sampler, pre_train_loader
 
 
 def main_worker(gpu, ngpus_per_node, args):
@@ -95,12 +97,12 @@ def main_worker(gpu, ngpus_per_node, args):
 
 
     # Data Loading
-    pre_train_sampler, pre_train_loader = dataprep(args)
+    augmentation_name, pre_train_sampler, pre_train_loader = dataprep(args)
     
     # WandB
     date = datetime.datetime.now().date()
 
-    project = f"MLECG_MoCO_LVEF_PRETRAIN"
+    project = f"MLECG_MoCo_LVEF_PRETRAIN"
     notes = "Pretrain"
     config = dict(
         batch_size = args["batch_size"],
@@ -110,7 +112,7 @@ def main_worker(gpu, ngpus_per_node, args):
         moco_dim = args["moco_dim"],
         moco_k = args["moco_k"],
         pre_train_size = len(pre_train_loader.dataset),
-
+        augmentation = augmentation_name,
         
     )
     networkLabel = "pre_train_ECG_SpatialTemporalNet"
@@ -206,7 +208,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
     progress = ProgressMeter(
         len(train_loader),
         [batch_time, data_time, losses, top1, top5],
-        prefix="Epoch: [{}]".format(epoch),
+        prefix="Epoch: [{}/{}]".format(epoch,args["pretrain_epochs"]),
     )
 
     model.train()
